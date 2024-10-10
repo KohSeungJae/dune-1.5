@@ -48,7 +48,9 @@ typedef enum {
 	k_quit,
 	k_undef,	// 정의되지 않은 키 입력	
 	k_re_dis,	// 맵 다시출력
-	k_test
+	k_test,
+	k_1, 
+	k_2
 } KEY;
 
 
@@ -123,13 +125,7 @@ struct {
 	int current;   // 현재 색상
 }COLOR;
 
-// 큐
-typedef
-struct {
-	char log_q[1000][SYS_WIDTH - 2];
-	int head;
-	int tail;
-}QUEUE;
+
 
 
 #endif

@@ -23,12 +23,14 @@ char frontbuf[MAP_HEIGHT][MAP_WIDTH] = { 0 };
 /* ================= game data =================== */
 extern map[N_LAYER][MAP_HEIGHT][MAP_WIDTH];
 extern COLOR map_color[MAP_HEIGHT][MAP_WIDTH]; 
-QUEUE sys_message = {
-	.log_q = {0},
-	.head = 0,
-	.tail = 0
-};
+char test_arr[6][10] = {"test1", "test2", "test3", "test4", "test5", "test6"};
 
+struct {
+	int cur;
+	int size;
+	char* arr[SYS_HEIGHT - 3];
+	
+}sys_log = {-1};
 
 
 void project(char src[N_LAYER][MAP_HEIGHT][MAP_WIDTH], char dest[MAP_HEIGHT][MAP_WIDTH]);
@@ -46,27 +48,67 @@ int what_color(POSITION pos) {
 	default: return  map_color[pos.row][pos.column].current;
 	}
 }
-void erase_message(POSITION pos, int size) {
-	gotoxy(padd(sys_pos, pos));
+// 로그출력
+// 출력할 문자열은 배열에 담아둠. -> 필요할때 꺼내쓸거임
+// 로그 배열 -> 출력되어있는 문자열의 주소를 담음.
+// print_message(위치, 문자열)
+
+// 공용
+void print_message(POSITION pos, char str[]) {
+	gotoxy(pos);
 	set_color(COLOR_DEFAULT);
-	for (int i = 0; i < size - 3; i++) {
+	printf("%s", str);
+}
+
+void erase_message(POSITION pos, int size) {
+	gotoxy(pos); 
+	set_color(COLOR_DEFAULT); 
+	for (int i = 0; i < size; i++) {
 		printf(" ");
 	}
 }
-void display_message(char str[], int size) {
-	POSITION pos = { SYS_HEIGHT-2, 2 }; 
-	erase_message(pos, SYS_WIDTH);
-	gotoxy(padd(sys_pos, pos));
-	set_color(COLOR_DEFAULT);
 
-	for (int i = 0; i < size; i++) {
-		printf("%c", str[i]);
+void mesaage_animatinon(POSITION pos, char str[]) {
+	gotoxy(pos); 
+	set_color(COLOR_DEFAULT); 
+	int idx = 0;
+	while (str[idx] != '\0') {
+		printf("%c", str[idx++]);
 		Sleep(50);
 	}
 }
-void scroll_message() {
 
+// 로그 배열의 문자열 교체
+void insert_system_str(char new_str[]) {
+	sys_log.cur = (sys_log.cur == SYS_HEIGHT - 3) ? 0 : sys_log.cur + 1; 
+
+	sys_log.arr[sys_log.cur] = new_str;
+
+	if (sys_log.size < SYS_HEIGHT - 3) sys_log.size++;
 }
+
+// 시스템 출력
+void display_system_message(char new_str[]) {
+	insert_system_str(new_str);
+	POSITION pos = { SYS_HEIGHT - 3, 2 };
+	int cnt = 1;
+	int cur = (sys_log.cur == 0) ? SYS_HEIGHT - 4 : sys_log.cur - 1;
+	while (cnt < sys_log.size) {
+		erase_message(padd(sys_pos, pos), SYS_WIDTH-3); 
+		print_message(padd(sys_pos, pos), sys_log.arr[cur]);
+		pos.row -= 1;
+		cnt++;
+		cur = (cur == 0) ? SYS_HEIGHT-4 : cur - 1; 
+	}
+	pos.row = SYS_HEIGHT - 2;
+	erase_message(padd(sys_pos, pos), SYS_WIDTH - 3);  
+	mesaage_animatinon(padd(sys_pos, pos), sys_log.arr[sys_log.cur]);
+}
+
+
+// 상태창 출력
+
+
 
 
 void display(
@@ -129,9 +171,9 @@ void display_cursor(CURSOR cursor) {
 	POSITION curr = cursor.current;
 
 	// 이전위치 색 복구
-	char ch = what_ch(prev);
-	int color = what_color(prev); 
-	printc(padd(map_pos, prev), ch, color);
+	char ch = what_ch(prev); 
+	int color = what_color(prev);  
+	printc(padd(map_pos, prev), ch, color); 
 
 	// 커서 위치 색 변경
 	ch = what_ch(curr);

@@ -30,6 +30,8 @@ KEY get_key(void) { // 방향키 반환함수
 	case 'q': return k_quit;	// 'q'를 누르면 종료
 	case 'r': return k_re_dis;  // 'r'를 누르면 맵을 다시 출력
 	case 't': return k_test;    // 테스트 키
+	case '1': return k_1;
+	case'2':  return k_2;
 	case 224:
 		byte = _getch();  // MSB 224가 입력 되면 1바이트 더 전달 받기
 		switch (byte) {

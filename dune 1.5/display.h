@@ -35,11 +35,17 @@ void dispaly_frame();
 void display_system_frame();
 void display_state_frame();
 void display_order_frame();
+void display_system_message(char new_str[]);
+void insert_system_str(char new_str[]);
+
 
 void re_display(RESOURCE resource,
 	char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH],
 	CURSOR cursor);
 
-void display_system_message(); 
+
+
+ 
+
 
 #endif

@@ -8,7 +8,7 @@
 void init(void);
 void intro(void);
 void outro(void);
-void cursor_move(DIRECTION dir);
+void cursor_move(DIRECTION dir, int n);
 void sand_worm_move();
 POSITION sand_worm_next_position(int);
 
@@ -64,7 +64,8 @@ SAND_WORM sand_worm[SAND_WORM_NUM] = {
 };
 
 
-
+int vist_timer = -1;
+KEY prev_key; 
 
 /* ================= main() =================== */
 int main(void) {
@@ -80,9 +81,19 @@ int main(void) {
 		// loop 돌 때마다(즉, TICK==10ms마다) 키 입력 확인
 		KEY key = get_key();
 
+		if (vist_timer != -1 && vist_timer > 80) cursor_move(ktod(prev_key), 1);   
 		// 키 입력이 있으면 처리
 		if (is_arrow_key(key)) {
-			cursor_move(ktod(key));
+			if (vist_timer == -1) {
+				vist_timer = 0;
+				prev_key = key;
+			}
+			else {
+				if (prev_key == key)
+					cursor_move(ktod(key), 5); 
+				else
+					cursor_move(ktod(key), 1);
+			}
 		}
 		else {
 			// 방향키 외의 입력
@@ -92,7 +103,13 @@ int main(void) {
 				re_display(resource, map, cursor); 
 				break;
 			case k_test:
-				display_message("test message", 12);
+				display_system_message("new str");
+				break;
+			case k_1:
+				display_system_message("1번");
+				break;
+			case k_2:
+				display_system_message("2번");
 				break;
 			case k_none:
 			case k_undef:
@@ -108,6 +125,7 @@ int main(void) {
 		
 		Sleep(TICK);
 		sys_clock += 10;
+		if (vist_timer != -1) vist_timer += 10;
 	}
 }
 
@@ -129,13 +147,11 @@ void intro(void) {
 	printf("화면이 깨질때는 r을 입력해주세요.\n");
 
 	pos.row += 5;
-	pos.column = 45;
+	pos.column = 40;
 	gotoxy(pos);
 
-	printf("아무키나 입력해주세요...\n");
-	while (!_kbhit()) {
-		Sleep(1000);
-	}
+	printf("계속하려면 아무키나 입력해주세요\n");
+	_getch();
 	system("cls");
 }
 
@@ -246,18 +262,23 @@ void init(void) {
 	map[1][obj.pos.row][obj.pos.column] = obj.repr;
 }
 
-// (가능하다면) 지정한 방향으로 커서 이동
-void cursor_move(DIRECTION dir) {
-	POSITION curr = cursor.current;
-	POSITION new_pos = pmove(curr, dir);
 
+// (가능하다면) 지정한 방향으로 커서 이동
+void cursor_move(DIRECTION dir, int n) { // 방향, 움직일 칸수
+	if (n == 0) {
+		vist_timer = -1;
+		return;
+	}
+
+	POSITION curr = cursor.current; 
+	POSITION new_pos = pmove(curr, dir); 
 	// validation check
 	if (1 <= new_pos.row && new_pos.row <= MAP_HEIGHT - 2 && \
 		1 <= new_pos.column && new_pos.column <= MAP_WIDTH - 2) {
-
-		cursor.previous = cursor.current;
 		cursor.current = new_pos;
 	}
+	cursor_move(dir, n - 1);  
+	cursor.previous = curr; // cursor.previous를 함수에 처음 들어왔을때의 cursor.current값으로 맞춰줌
 }
 
 
