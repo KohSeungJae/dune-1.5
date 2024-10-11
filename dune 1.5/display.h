@@ -12,8 +12,8 @@
 
 // 표시할 색상 정의. 대충 맞춰 뒀는데, 취향껏 추가하거나 변경하기
 #define COLOR_DEFAULT	15			// 검정, 하양
-#define COLOR_CURSOR	112			// 하양, 검정
-#define COLOR_RESOURCE  112			
+#define COLOR_CURSOR	47			// 초록
+#define COLOR_RESOURCE  112			// 흰 검
 #define COLOR_BULE		31			
 #define COLOR_RED		79			
 #define COLOR_BLACk		15
@@ -21,6 +21,7 @@
 #define COLOR_GARY		143
 #define COLOR_GREEN		47
 #define COLOR_YELLOW	224
+#define COLOR_PURPLE	223
 
 
 // 지금은 자원, 맵, 커서만 표시
@@ -31,21 +32,36 @@ void display(
 	CURSOR cursor
 );
 
+void display_cursor(CURSOR);
+
 void dispaly_frame(); 
 void display_system_frame();
 void display_state_frame();
-void display_order_frame();
+void display_command_frame();
 void display_system_message(char new_str[]);
 void insert_system_str(char new_str[]);
-
+void dispaly_object_info(CURSOR); 
+void display_command(CURSOR);
 
 void re_display(RESOURCE resource,
 	char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH],
 	CURSOR cursor);
 
+void esc();
 
-
+void BFS(CURSOR);
  
+typedef
+struct {
+	int size;
+	int about_size;
+	char message[10][100];
+}STATE_MESSAGE;
 
+typedef
+struct {
+	int size;
+	char message[3][100];
+}ORDER_LIST;
 
 #endif

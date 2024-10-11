@@ -11,7 +11,8 @@
 /* ================= system parameters =================== */
 #define TICK 10		// time unit(ms)
 
-#define N_LAYER 2
+#define N_LAYER 3
+#define N_C_LAYER 4
 #define MAP_WIDTH	60
 #define MAP_HEIGHT	18
 
@@ -21,24 +22,20 @@
 #define STA_WIDTH	MAP_WIDTH * 6/7
 #define STA_HEIGHT	MAP_HEIGHT
 
-#define ORD_WIDTH	STA_WIDTH 
-#define ORD_HEIGHT	SYS_HEIGHT
+#define CMD_WIDTH	STA_WIDTH 
+#define CMD_HEIGHT	SYS_HEIGHT
 
 /* ================= game data =================== */
 #define HAV_NUM 5
-#define SAND_WORM_NUM 2
+#define OBJ_NUM 3 
 
 /* ================= 위치와 방향 =================== */
 // 맵에서 위치를 나타내는 구조체
 typedef struct {
 	int row, column;
-} POSITION;
+} POSITION, CURSOR; 
 
-// 커서 위치
-typedef struct {
-	POSITION previous;  // 직전 위치
-	POSITION current;   // 현재 위치
-} CURSOR;
+
 
 // 입력 가능한 키 종류.
 // 수업에서 enum은 생략했는데, 크게 어렵지 않으니 예제 검색
@@ -48,6 +45,8 @@ typedef enum {
 	k_quit,
 	k_undef,	// 정의되지 않은 키 입력	
 	k_re_dis,	// 맵 다시출력
+	k_space,
+	k_esc,
 	k_test,
 	k_1, 
 	k_2
@@ -101,31 +100,15 @@ typedef struct {
 
 // 대강 만들어 봤음. 기능 추가하면서 각자 수정할 것
 typedef struct {
+	int layer;
 	POSITION pos;		// 현재 위치(position)
 	POSITION dest;		// 목적지(destination)
 	char repr;			// 화면에 표시할 문자(representation)
+	int color;
 	int move_period;	// '몇 ms마다 한 칸 움직이는지'를 뜻함
 	int speed;
 	int next_move_time;	// 다음에 움직일 시간
-} OBJECT_SAMPLE;
-
-typedef struct {
-	POSITION pos;		// 현재 위치(position)
-	POSITION dest;		// 목적지(destination)
-	char repr;			// 화면에 표시할 문자(representation)
-	int move_period;	// '몇 ms마다 한 칸 움직이는지'를 뜻함
-	int speed;
-	int next_move_time;	// 다음에 움직일 시간
-} SAND_WORM;
-
-// 색상 
-typedef
-struct {
-	int previous;  // 변경전 색상
-	int current;   // 현재 색상
-}COLOR;
-
-
+} OBJECT;
 
 
 #endif
