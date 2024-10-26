@@ -5,15 +5,24 @@
 #include "io.h"
 #include "display.h"
 
+
+
 void init(void);
 void intro(void);
 void outro(void);
 void cursor_move(DIRECTION dir, int n);
-void sand_worm_move();
-POSITION obj_next_position(int);
 
-// void sample_obj_move(void);
-// POSITION sample_obj_next_position();
+// 유닛 함수(공용)
+void eagle_move(); 
+
+
+// 샌드웜 함수
+void sand_worm_move();
+void sand_worm_onoff();
+void sand_worm_excretion(int x, int y);
+
+// 행동
+void object_action(KEY key);
 
 
 /* ================= control =================== */
@@ -27,46 +36,111 @@ int map_color[N_C_LAYER][MAP_HEIGHT][MAP_WIDTH] = { 0 };     // 지형, 건물�
 
 int spice_num[MAP_HEIGHT][MAP_WIDTH] = { 0 }; // 스파이스의 매장량
 
-
+POSITION Q[MAP_HEIGHT * MAP_WIDTH]; // BFS용 큐, 접근은 head 와 tail로 하기 때문에 쓰여진 값을 지우지 않아도 됨.
+int dist[MAP_HEIGHT][MAP_WIDTH];	// 이거는 쓸때마다 -1로 초기화 해줘야함
 
 RESOURCE resource = {
-	.spice = 0,
+	.spice = 5,
 	.spice_max = 5,
 	.population = 5,
 	.population_max = 100
 };
 
-OBJECT obj[OBJ_NUM] = {
-	// 1번
+// 유닛
+OBJECT eagle = {
+	.layer = 2,
+	.pos = {2,25},
+	.dest = {2, MAP_WIDTH - 2},	
+	.repr = 'E',
+	.color = COLOR_PURPLE,
+	.speed = 100,
+	.next_move_time = 100
+}; 
+OBJECT sand_worm[2] = {
 	{
 	.layer = 1,
-	.pos = {1, 1},
-	.dest = {MAP_HEIGHT - 2, MAP_WIDTH - 2},
+	.pos = {1 , 1},
+	.dest = {10,10},
 	.repr = 'W',
+	.len = 1,
 	.color = COLOR_DY,
-	.speed = 200,
-	.next_move_time = 200
-	},
-	// 2번
-	{
-	.layer = 2,
-		.pos = {2,25},
-		.dest = {2, MAP_WIDTH - 2},
-		.repr = 'E',
-		.color = COLOR_PURPLE,
-		.speed = 100,
-		.next_move_time = 100
-	},
-	{
-		.layer = 2,
-		.pos = {MAP_HEIGHT - 2, 10}, 
-		.dest = {MAP_HEIGHT - 2, MAP_WIDTH - 2}, 
-		.repr = 'E',
-		.color = COLOR_PURPLE,
-		.speed = 100,
-		.next_move_time = 100
+	.speed = 800,
+	.next_move_time = 0,
 	}
+	,
+	{
+	.layer = 1,
+	.pos = {MAP_HEIGHT-2 , MAP_WIDTH-2},
+	.dest = {10,10},
+	.repr = 'W',
+	.len = 1,
+	.color = COLOR_DY,
+	.speed = 800,
+	.next_move_time = 0,
+	}
+};
+OBJECTS havester = { 
+	.cost = 5,
+	.population = 5,
+	.mother = 'B',
+	.size = 0,
+	.layer = 1,
+	.repr = 'H',
+	.color = COLOR_BULE,
+	.speed = 2000,
+	.next_move_time = 0,
+	.order_message = {
+		.size = 2,
+		.message = {
+		"H: 스파이스 채집",
+		"M: 이동"
+		}
+	},
+	.state_message = {
+		.size = 8,
+		.about_size = 2,
+		.message = {
+			"[하베스터]",
+			"스파이스를 수확해 배달한다.",
+			"생산 비용 : 5",
+			"인구수 : 5",
+			"이동 주기 : 2000",
+			"공격력 : 0",
+			"체력 : 70",
+			"시야 : 0",
+		}
+	},
 
+	.object[0] = {
+		.pos = {MAP_HEIGHT - 4, 1},
+		.dest = {-1, -1},
+		.hp = 70
+	}
+};
+
+// 건물
+STRUCTURE base = {
+	.repr = 'B',
+	.cost = 0,
+	.size = 2,     // 한변의 길이
+	.state_message = {
+		.size = 2,
+		.about_size = 3,
+		.message = {
+			"[본진]",
+			"하베스터를 생산 할 수 있다."
+		}
+	},
+	.order_message = {
+		.size = 1,
+		.message = {
+			"H : 하베스터 생산"
+		}
+	},
+	.structure[0] = {
+		.hp = 50,
+		.pos = {MAP_HEIGHT - 3, 1} // 좌상단 좌표
+	}
 };
 
 
@@ -74,6 +148,10 @@ OBJECT obj[OBJ_NUM] = {
 int double_click_distance = 1;
 int vist_timer = -1;
 KEY prev_key; 
+bool sand_worm_on = 1;
+int object_num = 2;
+int excretion_time = 6000;
+char selection = -1;
 
 /* ================= main() =================== */
 int main(void) {
@@ -82,14 +160,14 @@ int main(void) {
 	init();
 	intro();
 
+
 	display(resource, map, cursor);
-	dispaly_frame();
+	display_frame();
 
 	while (1) {
-		// loop 돌 때마다(즉, TICK==10ms마다) 키 입력 확인
 		KEY key = get_key();
 
-		if (vist_timer != -1 && vist_timer > 80) {
+		if (vist_timer != -1 && vist_timer > 80) { // 80ms 이내에 다시 클릭이 이뤄지지 않았을때
 			cursor_move(ktod(prev_key), 1);
 		}
 		// 키 입력이 있으면 처리
@@ -116,26 +194,33 @@ int main(void) {
 				display_system_message("new strrrrrrr");
 				break;
 			case k_1:
-				display_system_message("1번");
+				display_system_message("test");
 				break;
-			case k_2:
-				display_system_message("2번");
+			case k_w:
+				sand_worm_onoff();
 				break;
 			case k_space:
-				display_command(cursor);  
-				dispaly_object_info(cursor);
+				select_object(cursor); 
+				break;
+			case k_h:
+				object_action(key); 
 				break;
 			case k_esc:
 				esc();
 				break;
+
 			case k_none:
 			case k_undef:
 			default: break;
 			}
 		}
+
 		// 샌드웜 동작
-		// sample_obj_move();
-		sand_worm_move();
+		if (sand_worm_on)
+			sand_worm_move();
+
+		// 독수리 이동
+		eagle_move();
 
 		// 화면 출력
 		display(resource, map, cursor);
@@ -146,25 +231,25 @@ int main(void) {
 	}
 }
 
-/* ================= subfunctions =================== */
+// setting
 void intro(void) {
 	POSITION pos = {10, 53};
 	gotoxy(pos);  
 	printf("DUNE 1.5\n");
 
-	pos.row += 2;
-	pos.column = 27;
+	pos.x += 2;
+	pos.y = 27;
 	gotoxy(pos);
 
 	printf("화면이 깨진다면 맵 크기를 줄이거나 창을 전체화면으로 설정해 주세요.\n");
 
-	pos.row += 2;
-	pos.column = 40;
+	pos.x += 2;
+	pos.y = 40;
 	gotoxy(pos);
 	printf("r을 입력하면 화면이 다시 출력됩니다.\n");
 
-	pos.row += 5;
-	pos.column = 38;
+	pos.x += 5;
+	pos.y = 38;
 	gotoxy(pos);
 
 	printf("더블 클릭시 이동할 거리를 입력해주세요 : ");
@@ -180,27 +265,17 @@ void outro(void) {
 }
 
 void init_rock(POSITION pos) {
-	map[0][pos.row][pos.column] = 'R';
-	map_color[0][pos.row][pos.column] = COLOR_GARY;
-	map_color[0][pos.row][pos.column] = COLOR_GARY;
+	map[0][pos.x][pos.y] = 'R';
+	map_color[0][pos.x][pos.y] = COLOR_GARY;
+	map_color[0][pos.x][pos.y] = COLOR_GARY;
 }
 
 void init_4rock(POSITION pos) {
-	for (int i = pos.row; i < pos.row + 2; i++) {
-		for (int j = pos.column; j < pos.column + 2; j++) {
+	for (int i = pos.x; i < pos.x + 2; i++) {
+		for (int j = pos.y; j < pos.y + 2; j++) {
 			POSITION pos = { i, j };
 			init_rock(pos);
 		}
-	}
-}
-
-void init_obj() { 
-	for (int i = 0; i < OBJ_NUM; i++) {
-		int L = obj[i].layer;
-		int x = obj[i].pos.row;
-		int y = obj[i].pos.column;
-		map[L][x][y] = obj[i].repr;
-		map_color[L][x][y] = obj[i].color;
 	}
 }
 
@@ -231,8 +306,7 @@ void init(void) {
 		map_color[0][i][MAP_WIDTH - 1] = COLOR_DEFAULT;
 		for (int j = 1; j < MAP_WIDTH - 1; j++) {
 			map[0][i][j] = ' ';
-			map_color[0][i][j] = COLOR_YELLOW; 
-
+			map_color[0][i][j] = COLOR_YELLOW;  
 		}
 	}
 
@@ -284,9 +358,27 @@ void init(void) {
 	init_rock(pos[2]);
 	init_rock(pos[3]);
 	init_rock(pos[4]);
+	/*
+	POSITION pos1 = { 5, 1 }; 
+	for (int i = 0; i < 5; i++) {
+		init_rock(pos1); 
+		pos1.y += 1;
+	}
+	pos1.x = 6;
+	pos1.y = 3;
+	init_rock(pos1);
+	pos1.x = 7;
+	pos1.y = 3;
+	for (int i = 0; i < 5; i++) {
+		init_rock(pos1);
+		pos1.y += 1;
+	}
+	*/
+
+	/*
 	POSITION pos1 = {MAP_HEIGHT-3, MAP_WIDTH-3};
 	init_4rock(pos1);
-
+	/*/
 
 
 	for (int l = 1; l < N_LAYER; l++) {
@@ -306,13 +398,31 @@ void init(void) {
 	map_color[1][3][MAP_WIDTH - 2] = COLOR_RED;
 
 	// 유닛 추가
-	// 샌드웜, 독수리
-	init_obj();
+	// 독수리
+	map[2][eagle.pos.x][eagle.pos.y] = eagle.repr;
+	map_color[2][eagle.pos.x][eagle.pos.y] = eagle.color;
+
+	// 샌드웜
+	map[1][1][1] = 'W';
+	map_color[1][1][1] = COLOR_DY;
+	map[1][MAP_HEIGHT - 2][MAP_WIDTH - 2] = 'W'; 
+	map_color[1][MAP_HEIGHT - 2][MAP_WIDTH - 2] = COLOR_DY;
+
+	//모래폭풍
+
+	map[2][10][20] = 's';
+	map[2][10][21] = 'T';
+	map[2][11][20] = 'O';
+	map[2][11][21] = 'm';
+	map_color[2][10][20] = COLOR_DY; 
+	map_color[2][10][21] = COLOR_DY; 
+	map_color[2][11][20] = COLOR_DY; 
+	map_color[2][11][21] = COLOR_DY;
 
 }
 
 
-// (가능하다면) 지정한 방향으로 커서 이동
+// 커서 이동
 void cursor_move(DIRECTION dir, int n) { // 방향, 움직일 칸수
 	if (n == 0) {
 		vist_timer = -1;
@@ -322,99 +432,276 @@ void cursor_move(DIRECTION dir, int n) { // 방향, 움직일 칸수
 	POSITION curr = cursor; 
 	POSITION new_pos = pmove(curr, dir); 
 	// validation check
-	if (1 <= new_pos.row && new_pos.row <= MAP_HEIGHT - 2 && \
-		1 <= new_pos.column && new_pos.column <= MAP_WIDTH - 2) {
-		map_color[3][cursor.row][cursor.column] = -1;
+	if (1 <= new_pos.x && new_pos.x <= MAP_HEIGHT - 2 && \
+		1 <= new_pos.y && new_pos.y <= MAP_WIDTH - 2) {
+		map_color[3][cursor.x][cursor.y] = -1;
 		cursor = new_pos;
-		map_color[3][cursor.row][cursor.column] = COLOR_CURSOR; 
+		map_color[3][cursor.x][cursor.y] = COLOR_CURSOR; 
 	}
 	cursor_move(dir, n - 1);  
 }
 
-
-/* ================= sample object movement =================== */
-POSITION obj_next_position(int i) {
-	// 현재 위치와 목적지를 비교해서 이동 방향 결정	
-	POSITION diff = psub(obj[i].dest, obj[i].pos);
+// 독수리 이동
+void eagle_move() {
+	if (sys_clock <= eagle.next_move_time) return; 
+	POSITION diff = psub(eagle.dest, eagle.pos);
 	DIRECTION dir;
 
-	// 목적지 도착. 지금은 단순히 원래 자리로 왕복
-	if (diff.row == 0 && diff.column == 0) {
+	if (eagle.pos.x == eagle.dest.x && eagle.pos.y == eagle.dest.y) {
+		if (eagle.dest.x == MAP_HEIGHT - 2)
+			eagle.dest.x = 1;
+		else
+			eagle.dest.x++;
 
-		if (obj[i].repr == 'E') {
-			int nx = (obj[i].dest.row == MAP_HEIGHT - 2) ? 1 : obj[i].dest.row + 1;
-			POSITION new_pos = { nx, MAP_WIDTH - 1 - obj[i].dest.column }; 
-			obj[i].dest = new_pos;
-		}
-		else {
-			// 랜덤목적지
-			int nx = rand() % (MAP_HEIGHT - 2) + 1;
-			int ny = rand() % (MAP_WIDTH - 2) + 1;
-
-			POSITION new_pos = { nx, ny };
-			obj[i].dest = new_pos;
-		}
-
-		/*
-		if (obj[idx].dest.row == 1 && obj[idx].dest.column == 1) {
-			// topleft --> bottomright로 목적지 설정
-			POSITION new_dest = { MAP_HEIGHT - 2, MAP_WIDTH - 2 };
-			obj[idx].dest = new_dest;
-		}
-		else {
-			// bottomright --> topleft로 목적지 설정
-			POSITION new_dest = { 1, 1 };
-			obj[idx].dest = new_dest;
-		}
-		*/
-
+		eagle.dest.y = MAP_WIDTH-1 - eagle.dest.y;
 		dir = d_stay; 
-	}	
-	// 가로축, 세로축 거리를 비교해서 더 먼 쪽 축으로 이동
-	else if (abs(diff.row) >= abs(diff.column)) {
-		dir = (diff.row >= 0) ? d_down : d_up;
+	}
+	else if (abs(diff.x) >= abs(diff.y)) {
+		dir = (diff.x >= 0) ? d_down : d_up;
+
 	}
 	else {
-		dir = (diff.column >= 0) ? d_right : d_left;
+		dir = (diff.y >= 0) ? d_right : d_left;
+
 	}
 
-	// validation check
-	POSITION next_pos = pmove(obj[i].pos, dir); 
-	if (next_pos.row < 1 || next_pos.row > MAP_HEIGHT - 2 || \
-		 next_pos.column < 1 || next_pos.column > MAP_WIDTH - 2) { // 맵을 벗어날때
+	int r = eagle.pos.x;
+	int c = eagle.pos.y;
 
-		return obj[i].pos;
+	POSITION next_pos = pmove(eagle.pos, dir); 
+	int nr = next_pos.x;
+	int nc = next_pos.y;
+
+	if (next_pos.x < 1 || next_pos.x > MAP_HEIGHT - 2 || \
+		 next_pos.y < 1 || next_pos.y > MAP_WIDTH - 2) { // 맵을 벗어날때
+		return; 
 	}
-	else if (map[1][next_pos.row][next_pos.column] > 0) { // 가려는 위치에 다른 유닛이 있을때
-		// return sand_worm[idx].pos;
+	else {
+		map[2][r][c] = -1; 
+		map_color[2][r][c] = -1;
+		map[2][nr][nc] = 'E';
+		map_color[2][nr][nc] = COLOR_PURPLE;
+		eagle.pos = next_pos; 
+	}
+
+	eagle.next_move_time = sys_clock + eagle.speed;
+}
+
+// 샌드웜 관련 함수
+void sand_worm_onoff() {
+	if (sand_worm_on) {
+		sand_worm_on = 0;
+		display_system_message("샌드웜 비활성화");
+	}
+	else {
+		sand_worm_on = 1;
+		display_system_message("샌드웜 활성화");
+	}
+}
+
+void set_sand_worm_dest(int idx) { // 너비우선탐색으로 가장 가까운 유닛을 탐색하고, 목적지로 설정하는 함수.
+	for (int i = 0; i < MAP_HEIGHT; i++) { 
+		for (int j = 0; j < MAP_WIDTH; j++) { 
+			dist[i][j] = -1; 
+		}
+	}
+
+	int head = 0, tail = 0; 
+	Q[tail++] = sand_worm[idx].pos;
+	dist[sand_worm[idx].pos.x][sand_worm[idx].pos.y] = 0;
+	bool find_dest = 0; 
+
+	while (head != tail) {
+		POSITION cur = Q[head++]; 
+
+		for (int i = 1; i <= 4; i++) {
+			POSITION ncur = pmove(cur, i); 
+
+			if (ncur.x < 1 || ncur.x > MAP_HEIGHT - 2 || ncur.y < 1 || ncur.y > MAP_WIDTH - 2) continue;
+			if (map[0][ncur.x][ncur.y] != ' ' || dist[ncur.x][ncur.y] != -1) continue;
+			if (map[1][ncur.x][ncur.y] != 'W' && (map[1][ncur.x][ncur.y] != -1 || object_num == 0)) {
+				sand_worm[idx].dest = ncur;
+				find_dest = 1;
+			}
+
+			dist[ncur.x][ncur.y] = dist[cur.x][cur.y] + 1;
+			Q[tail++] = ncur;
+		}
+		if (find_dest) break;
+	}
+}
+
+int find_min_dist(POSITION pos, POSITION dest) { // 너비우선탐색으로 목적지까지의 거리를 구하는 함수.
+	if (pos.x == dest.x && pos.y == dest.y) return 0; 
+
+	for (int i = 0; i < MAP_HEIGHT; i++) {
+		for (int j = 0; j < MAP_WIDTH; j++) {
+			dist[i][j] = -1;
+		}
+	}
+
+	int head = 0, tail = 0;
+	Q[tail++] = pos;
+	dist[pos.x][pos.y] = 0; 
+	bool find_dest = 0;
+
+	while (head != tail) { 
+		POSITION cur = Q[head++]; 
+		for (int i = 1; i <= 4; i++) {
+			POSITION ncur = pmove(cur, i); 
+
+			if (ncur.x < 1 || ncur.x > MAP_HEIGHT - 2 || ncur.y < 1 || ncur.y > MAP_WIDTH - 2) continue; 
+			if (map[0][ncur.x][ncur.y] != ' ' || dist[ncur.x][ncur.y] != -1) continue; 
+			if (ncur.x == dest.x &&  ncur.y == dest.y) { 
+				find_dest = 1; 
+				return dist[cur.x][cur.y] + 1; 
+			}
+
+			dist[ncur.x][ncur.y] = dist[cur.x][cur.y] + 1;
+			Q[tail++] = ncur;
+		}
+		if (find_dest) break;
+	}
+	return 0;
+}
+
+POSITION sand_worm_next_position(int idx) {
+	// 샌드웜 목적지 설정
+	if (object_num != 0)
+		set_sand_worm_dest(idx);
+
+	// 남은 유닛이 없을때 && 샌드웜이 목적지에 도착했을때 -> 랜덤 목적지
+	if (object_num == 0 &&\
+		(sand_worm[idx].pos.x == sand_worm[idx].dest.x) &&\
+		(sand_worm[idx].pos.y == sand_worm[idx].dest.y)) { 
+		int nx, ny;
+		do {
+			nx = rand() % (MAP_HEIGHT - 2) + 1;
+			ny = rand() % (MAP_WIDTH - 2) + 1;
+		} while (map[0][nx][ny] != ' ');
+
+		POSITION new_pos = { nx, ny };
+		sand_worm[idx].dest = new_pos;
+	}
+
+	int min_dist = INT_MAX; 
+	DIRECTION dir; 
+	// 현재 위치에서 상하좌우 네방향중 어느방향으로 가는게 가장 최단거리인지 구함.
+	for (DIRECTION d = 1; d <= 4; d++) { 
+		POSITION next_pos = pmove(sand_worm[idx].pos, d);
+		int nx = next_pos.x;
+		int ny = next_pos.y;
+		if (nx < 1 || nx > MAP_HEIGHT - 2 || ny < 1 || ny > MAP_WIDTH - 2 || map[0][nx][ny] != ' ') continue; 
+		
+		int tmp = find_min_dist(next_pos, sand_worm[idx].dest); // 목적지까지의 거리를 반환
+		if (tmp < min_dist) { 
+			min_dist = tmp; 
+			dir = d;  
+		}
+	}
+
+	POSITION next_pos = pmove(sand_worm[idx].pos, dir);
+	int nx = next_pos.x;
+	int ny = next_pos.y;
+
+	if (nx < 1 || nx > MAP_HEIGHT - 2 || ny < 1 || ny > MAP_WIDTH - 2) { // 맵을 벗어날때
+		return sand_worm[idx].pos;
+	}
+	else if (map[0][nx][ny] != ' ') { 
+		display_system_message("샌드웜 에러: 이동위치에 장애물이 있습니다."); // 오류 확인용
+		sand_worm_onoff();
 		return next_pos;
 	}
 	else {
-
 		return next_pos;  // 다음 위치
 	}
-	
 }
 
-void sand_worm_move(void) { 
-	for (int i = 0; i < OBJ_NUM; i++) {
-		if (sys_clock <= obj[i].next_move_time) continue;
+void sand_worm_move() {
+	for (int i = 0; i < 2; i++) {
+		if (sys_clock <= sand_worm[i].next_move_time) return;
+		if (sand_worm[i].pos.x == sand_worm[i].dest.x && sand_worm[i].pos.y == sand_worm[i].dest.y && object_num != 0) {
+			object_num--;
+			sand_worm[i].len++;
+			display_system_message("샌드웜이 유닛을 잡아먹었습니다.");
+			/*
+			char buffer[20];
+			snprintf(buffer, sizeof(buffer), "샌드웜의 길이 : %d", sand_worm[i].len);
+			display_system_message(buffer);
+			*/
+		}
 
-		int r = obj[i].pos.row;
-		int c = obj[i].pos.column;
+
+		int x = sand_worm[i].pos.x;
+		int y = sand_worm[i].pos.y;
 
 		// 오브젝트(건물, 유닛 등)은 layer1(map[1])에 저장
-		map[obj[i].layer][r][c] = -1; // 유닛 지나간 자리 복구
-		map_color[obj[i].layer][r][c] = -1;
+		map[1][x][y] = -1; // 유닛 지나간 자리 복구
+		map_color[1][x][y] = -1;
+		sand_worm_excretion(x, y);
 
 		// 움직일 자리
-		obj[i].pos = obj_next_position(i);
-		r = obj[i].pos.row;
-		c = obj[i].pos.column;
+		sand_worm[i].pos = sand_worm_next_position(i); 
+		x = sand_worm[i].pos.x;
+		y = sand_worm[i].pos.y;
 
-		map[obj[i].layer][r][c] = obj[i].repr;
-		map_color[obj[i].layer][r][c] = obj[i].color; // 배경색상 변경 
+		// 같은레이어의 유닛이 겹치면 하나가 지워져버림 
+		map[1][x][y] = sand_worm[i].repr;
+		map_color[1][x][y] = sand_worm[i].color; // 배경색상 변경 
 
-		obj[i].next_move_time = sys_clock + obj[i].speed;
+		sand_worm[i].next_move_time = sys_clock + sand_worm[i].speed;
 	}
 }
+
+void sand_worm_excretion(int x, int y) {
+	if (excretion_time >= sys_clock) return;  
+	int next_time = (rand() % 180 + 60) * 1000; // 1분 - 3분 사이
+	excretion_time += next_time; 
+
+
+	map[0][x][y] = 'S';
+	map_color[0][x][y] = COLOR_DY;
+	spice_num[x][y] = rand() % 9 + 1;
+
+	char buffer[100]; 
+	snprintf(buffer, 100, "샌드웜이 스파이스를 배출했습니다. 매장량 : %d", spice_num[x][y]); 
+	display_system_message(buffer); 
+	snprintf(buffer, 100, "다음 배출 %d:%d",  (sys_clock + next_time) / 60000, ((sys_clock + next_time) / 1000 ) % 60);
+	display_system_message(buffer);  
+}
+
+
+// 행동
+void object_action(KEY key) {
+	OBJECTS* cur_obj = &(havester);
+	switch (key) {
+	case 'H': cur_obj = &(havester); break;
+	}
+
+
+	if ((*cur_obj).mother != selection) return;
+	if (resource.spice < (*cur_obj).cost) {
+		display_system_message("스파이스가 부족합니다.");
+		return;
+	}
+	if (resource.population + (*cur_obj).population > resource.population_max) {
+		display_system_message("인구수가 부족합니다.");
+		return;
+	}
+
+	char buffer[100];
+	snprintf(buffer, 100, "%s 생성완료.", (*cur_obj).state_message.message[0]);
+	display_system_message(buffer);
+
+	int i = ++(*cur_obj).size;
+	int x = MAP_HEIGHT - 4;
+	int y = 2;
+	(*cur_obj).object[1].pos.x = x;
+	(*cur_obj).object[1].pos.y = y;
+
+	map[(*cur_obj).layer][x][y] = (*cur_obj).repr;
+	map_color[(*cur_obj).layer][x][y] = (*cur_obj).color;
+	resource.spice -= (*cur_obj).cost;
+	resource.population += (*cur_obj).population;
+}
+

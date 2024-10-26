@@ -1,4 +1,4 @@
-#ifndef _COMMON_H_ 
+#ifndef _COMMON_H_  
 #define _COMMON_H_
 
 #include <stdio.h>
@@ -12,7 +12,7 @@
 #define TICK 10		// time unit(ms)
 
 #define N_LAYER 3
-#define N_C_LAYER 4
+#define N_C_LAYER 4  // 최상위 레이어는 커서
 #define MAP_WIDTH	60
 #define MAP_HEIGHT	18
 
@@ -26,13 +26,13 @@
 #define CMD_HEIGHT	SYS_HEIGHT
 
 /* ================= game data =================== */
-#define HAV_NUM 5
-#define OBJ_NUM 3 
+#define OBJ_NUM 1
+#define MAX_TAIL 5
 
 /* ================= 위치와 방향 =================== */
 // 맵에서 위치를 나타내는 구조체
 typedef struct {
-	int row, column;
+	int x, y;
 } POSITION, CURSOR; 
 
 
@@ -49,7 +49,8 @@ typedef enum {
 	k_esc,
 	k_test,
 	k_1, 
-	k_2
+	k_w,
+	k_h
 } KEY;
 
 
@@ -64,13 +65,13 @@ typedef enum {
 
 // 편의성 함수
 inline POSITION padd(POSITION p1, POSITION p2) {
-	POSITION p = { p1.row + p2.row, p1.column + p2.column };
+	POSITION p = { p1.x + p2.x, p1.y + p2.y };
 	return p;
 }
 
 // p1 - p2
 inline POSITION psub(POSITION p1, POSITION p2) {
-	POSITION p = { p1.row - p2.row, p1.column - p2.column };
+	POSITION p = { p1.x - p2.x, p1.y - p2.y };
 	return p;
 }
 
@@ -98,17 +99,70 @@ typedef struct {
 } RESOURCE;
 
 
-// 대강 만들어 봤음. 기능 추가하면서 각자 수정할 것
+// 유닛 구조체
+typedef
+struct {
+	int size;
+	int about_size;
+	char message[10][100];
+}STATE_MESSAGE;
+
+typedef
+struct {
+	int size;
+	char message[3][100];
+}ORDER_MESSAGE;
+
 typedef struct {
 	int layer;
 	POSITION pos;		// 현재 위치(position)
 	POSITION dest;		// 목적지(destination)
 	char repr;			// 화면에 표시할 문자(representation)
 	int color;
-	int move_period;	// '몇 ms마다 한 칸 움직이는지'를 뜻함
-	int speed;
+	int len;
+	int speed;			// 움직이는 주기
 	int next_move_time;	// 다음에 움직일 시간
-} OBJECT;
+	STATE_MESSAGE state_message;
+	ORDER_MESSAGE order_message;
+}OBJECT;
+
+typedef struct { // 20바이트
+	int hp;
+	POSITION pos;
+	POSITION dest; 
+}PRIVATE;
+
+
+typedef struct {
+	char mother;
+	int cost;
+	int population; 
+	int size;
+	int layer;
+	char repr;			
+	int color;
+	int speed;			
+	int next_move_time;	
+
+	STATE_MESSAGE state_message;
+	ORDER_MESSAGE order_message;
+
+	PRIVATE object[10];  // 각 유닛 정보
+}OBJECTS;
+
+typedef struct {
+	char repr;
+	int cost;
+	int hp;
+	int size;     // 한변의 길이
+	POSITION pos; // 좌상단 좌표
+
+	STATE_MESSAGE state_message; 
+	ORDER_MESSAGE order_message;
+
+	PRIVATE structure[10];
+}STRUCTURE;
+
 
 
 #endif

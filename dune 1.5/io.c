@@ -4,7 +4,7 @@
 #include "io.h"
 
 void gotoxy(POSITION pos) { // 커서 이동함수
-	COORD coord = { pos.column, pos.row }; // 열, 행 순서로 전달해야함
+	COORD coord = { pos.y, pos.x }; // 열, 행 순서로 전달해야함
 	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 }
 
@@ -27,11 +27,17 @@ KEY get_key(void) { // 방향키 반환함수
 
 	int byte = _getch();    // 입력된 키를 전달 받기
 	switch (byte) {
+	case 'Q':
 	case 'q': return k_quit;	// 'q'를 누르면 종료
+	case 'R':
 	case 'r': return k_re_dis;  // 'r'를 누르면 맵을 다시 출력
+	case 'T':
 	case 't': return k_test;    // 테스트 키
-	case '1': return k_1;
-	case'2':  return k_2;
+	case 'W':
+	case 'w': return k_w;
+	case 'H':
+	case 'h': return k_h; 
+	case '1': return k_1; 
 	case 27: return k_esc;
 	case 32: return k_space;
 	case 224:

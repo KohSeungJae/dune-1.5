@@ -6,14 +6,17 @@
 */
 
 #include "display.h"
+#include "common.h"
 #include "io.h"
 
 // 출력할 내용들의 좌상단(topleft) 좌표
+#define MAGIN 1 
 const POSITION resource_pos = { 0, 0 };
-const POSITION map_pos = { 1, 0 };
-const POSITION sys_pos = { MAP_HEIGHT+1, 0 };
-const POSITION sta_pos = { 1, MAP_WIDTH + 1 };
-const POSITION ord_pos = { MAP_HEIGHT + 1, MAP_WIDTH + 1 };
+const POSITION time_pos = { 0, MAP_WIDTH - 14 };
+const POSITION map_pos = { MAGIN, MAGIN-1 };
+const POSITION sys_pos = { MAP_HEIGHT + MAGIN,  MAGIN-1 }; 
+const POSITION sta_pos = { MAGIN,  MAP_WIDTH + MAGIN };
+const POSITION ord_pos = { MAP_HEIGHT + MAGIN,  MAP_WIDTH + MAGIN };
 
 
 
@@ -32,16 +35,17 @@ extern int map_color[N_C_LAYER][MAP_HEIGHT][MAP_WIDTH];
 
 extern int spice_num[MAP_HEIGHT][MAP_WIDTH];
 extern int sys_clock;
-char test_arr[6][10] = {"test1", "test2", "test3", "test4", "test5", "test6"};
+extern char selection;
+
 struct {
 	int cur;
 	int size;
-	char* arr[SYS_HEIGHT - 3];
-	
+	char arr[SYS_HEIGHT - 3][100];
 }sys_log = {-1};
 
 /* ================= state message =================== */
-STATE_MESSAGE desert_s = {
+STATE_MESSAGE
+desert_s = {
 	.size = 3,
 	.about_size = 3,
 	.message = {
@@ -57,7 +61,6 @@ base_s = {
 		"[본진]",
 		"하베스터를 생산 할 수 있다."
 	}
-
 },
 plate_s = {
 	.size = 2,
@@ -100,39 +103,48 @@ spice_s = {
 	}
 };
 
-ORDER_LIST base_o = {
+ORDER_MESSAGE
+base_o = {
 	.size = 1,
 	.message = {
-		"H : 하베스트 생산"
+		"H : 하베스터 생산"
 	}
+},
+havester_o = {
+	.size = 2,
+	.message = {
+		"H: 스파이스 채집",
+		"M: 이동"
+	}
+
 };
 
-
+extern STRUCTURE base; 
 
 
 void project(char src[N_LAYER][MAP_HEIGHT][MAP_WIDTH], char dest[MAP_HEIGHT][MAP_WIDTH]);
+void project_color(int src[N_C_LAYER][MAP_HEIGHT][MAP_WIDTH], int dest[MAP_HEIGHT][MAP_WIDTH]); 
 void display_resource(RESOURCE resource);
 void display_map(char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH]);
-void display_cursor(CURSOR cursor);
+void display_time(); 
 
 char what_ch(POSITION pos) {
-	switch (backbuf[pos.row][pos.column]) {
-	case 'S': return '0' + spice_num[pos.row][pos.column];
+	switch (backbuf[pos.x][pos.y]) {
+	case 'S': return '0' + spice_num[pos.x][pos.y];
 	default:
-		return backbuf[pos.row][pos.column];
+		return backbuf[pos.x][pos.y];
 	}
 
 }
 int what_color(POSITION pos) {
-	return color_backbuf[pos.row][pos.column];
+	return color_backbuf[pos.x][pos.y];
 }
 
 // 로그출력
-// 출력할 문자열은 배열에 담아둠. -> 필요할때 꺼내쓸거임
-// 로그 배열 -> 출력되어있는 문자열의 주소를 담음.
+
 // print_message(위치, 문자열)
 
-// 공용
+// 공용 출력 함수
 void print_message(POSITION pos, char str[]) {
 	gotoxy(pos);
 	set_color(COLOR_DEFAULT);
@@ -159,9 +171,9 @@ void mesaage_animatinon(POSITION pos, char str[]) {
 
 // 로그 배열의 문자열 교체
 void insert_system_str(char new_str[]) {
-	sys_log.cur = (sys_log.cur == SYS_HEIGHT - 3) ? 0 : sys_log.cur + 1; 
+	sys_log.cur = (sys_log.cur == SYS_HEIGHT - 4) ? 0 : sys_log.cur + 1; 
 
-	sys_log.arr[sys_log.cur] = new_str;
+	snprintf(sys_log.arr[sys_log.cur], 100, new_str);
 
 	if (sys_log.size < SYS_HEIGHT - 3) sys_log.size++;
 }
@@ -175,11 +187,11 @@ void display_system_message(char new_str[]) {
 	while (cnt < sys_log.size) {
 		erase_message(padd(sys_pos, pos), SYS_WIDTH-3); 
 		print_message(padd(sys_pos, pos), sys_log.arr[cur]);
-		pos.row -= 1;
+		pos.x -= 1;
 		cnt++;
-		cur = (cur == 0) ? SYS_HEIGHT-4 : cur - 1; 
+		cur = (cur == 0) ? SYS_HEIGHT - 4 : cur - 1; 
 	}
-	pos.row = SYS_HEIGHT - 2;
+	pos.x = SYS_HEIGHT - 2;
 	erase_message(padd(sys_pos, pos), SYS_WIDTH - 3);  
 	mesaage_animatinon(padd(sys_pos, pos), sys_log.arr[sys_log.cur]);
 }
@@ -190,28 +202,30 @@ void print_state(char str[10][100], int about_size, int size) {
 	POSITION pos = { 3,2 };
 	for (int i = 0; i < about_size; i++) {
 		print_message(padd(sta_pos, pos), str[i]);  
-		pos.row += 2; 
+		pos.x += 2; 
 	}
 	for (int i = about_size; i < size; i++) {
 		print_message(padd(sta_pos, pos), str[i]);  
-		pos.row += 1;
+		pos.x += 1;
 	}
 
 }
 
-void dispaly_object_info(CURSOR cursor) {
+void display_object_info(CURSOR cursor) {
 	POSITION pos = { 2,1 };
 	for (int i = 0; i < STA_HEIGHT - 3; i++) {
 		erase_message(padd(sta_pos, pos), STA_WIDTH - 2);
-		pos.row += 1;
+		pos.x += 1;
 	}
 
-	int curX = cursor.row;
-	int curY = cursor.column;
+	int curX = cursor.x;
+	int curY = cursor.y;
+
+	STATE_MESSAGE* cur = &base.state_message;
 
 	switch (backbuf[curX][curY]) {
 	case 'B':
-		print_state(base_s.message, base_s.about_size, base_s.size);
+		print_state((*cur).message, (*cur).about_size, (*cur).size);  
 		break;
 	case 'P':
 		print_state(plate_s.message, plate_s.about_size, plate_s.size);
@@ -237,22 +251,25 @@ void print_command(char str[3][100], int size) {
 	POSITION pos = { 3,2 };
 	for (int i = 0; i < size; i++) {
 		print_message(padd(ord_pos, pos), str[i]); 
-		pos.row += 1;
+		pos.x += 2;
 	}
 }
 void display_command(CURSOR cursor) { 
 	POSITION pos = { 2,1 };
 	for (int i = 0; i < CMD_HEIGHT - 3; i++) { 
 		erase_message(padd(ord_pos, pos), CMD_WIDTH - 2); 
-		pos.row += 1;
+		pos.x += 1;
 	}
 
-	int curX = cursor.row;
-	int curY = cursor.column;
+	int curX = cursor.x;
+	int curY = cursor.y;
 
 	switch (backbuf[curX][curY]) {
 	case 'B':
 		print_command(base_o.message, base_o.size);
+		break;
+	case 'H':
+		print_command(havester_o.message, havester_o.size);
 		break;
 
 	}
@@ -260,15 +277,16 @@ void display_command(CURSOR cursor) {
 
 // esc
 void esc() {
+	selection = -1;
 	POSITION pos = { 2, 2 };
 	for (int i = 0; i < STA_HEIGHT - 3; i++) {
 		erase_message(padd(sta_pos, pos), STA_WIDTH - 3);
-		pos.row += 1;
+		pos.x += 1;
 	}
-	pos.row = 2;
+	pos.x = 2;
 	for (int i = 0; i < CMD_HEIGHT - 3; i++) { 
 		erase_message(padd(ord_pos, pos), CMD_WIDTH - 3); 
-		pos.row += 1; 
+		pos.x += 1; 
 	}
 }
 
@@ -279,6 +297,7 @@ void display(
 {
 	display_resource(resource);
 	display_map(map);
+	display_time();  
 	// 커서가 보이는게 거슬려서 커서가 이동할때 한번만 출력되게 변경. 그런데 이러면 다른 유닛이 커서를 지나가면 커서가 지워진다는 문제가 있음.
 	// 커서를 최상위 레이어에 넣으면 해결. -> 레이어를 하나더 늘려야함.
 	// map_color[3][][]에 커서를 넣어놓고 project 해서 출력. -> 현재 커서의 위치만 알고있으면됨
@@ -293,6 +312,12 @@ void display_resource(RESOURCE resource) {
 		resource.spice, resource.spice_max,
 		resource.population, resource.population_max
 	);
+}
+
+void display_time() {
+	set_color(COLOR_RESOURCE); 
+	gotoxy(time_pos); 
+	printf("time: %d: %d: %d", sys_clock / 60000, (sys_clock / 1000) % 60, (sys_clock / 10) % 60);
 }
 
 // subfunction of draw_map()
@@ -318,8 +343,6 @@ void project_color(int src[N_C_LAYER][MAP_HEIGHT][MAP_WIDTH], int dest[MAP_HEIGH
 		}
 	}
 }
-
-
 void display_map(char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH]) {
 	project(map, backbuf);
 	project_color(map_color, color_backbuf);   
@@ -328,7 +351,6 @@ void display_map(char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH]) {
 		for (int j = 0; j < MAP_WIDTH; j++) {
 			if (frontbuf[i][j] != backbuf[i][j] || color_backbuf[i][j] != color_frontbuf[i][j]) {
 				POSITION pos = {i, j};
-
 				char ch = what_ch(pos); 
 				int color = what_color(pos); 
 				
@@ -342,23 +364,17 @@ void display_map(char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH]) {
 
 
 // 프레임 출력
-void dispaly_frame() {
-	display_system_frame();
-	display_state_frame();
-	display_command_frame();
-}
-
 void display_system_frame() {
 	for (int j = 1; j < SYS_WIDTH - 1; j++) {
 		POSITION pos = { 0, j };
 		printc(padd(sys_pos, pos), '-', COLOR_DEFAULT);
-		pos.row = SYS_HEIGHT - 1;
+		pos.x = SYS_HEIGHT - 1;
 		printc(padd(sys_pos, pos), '-', COLOR_DEFAULT);
 	}
 	for (int i = 1; i < SYS_HEIGHT - 1; i++) {
 		POSITION pos = { i, 0 };
 		printc(padd(sys_pos, pos), '|', COLOR_DEFAULT);
-		pos.column = SYS_WIDTH - 1;
+		pos.y = SYS_WIDTH - 1;
 		printc(padd(sys_pos, pos), '|', COLOR_DEFAULT);
 
 	}
@@ -373,14 +389,14 @@ void display_state_frame() {
 	for (int j = 1; j < STA_WIDTH - 1; j++) {
 		POSITION pos = { 0, j };
 		printc(padd(sta_pos, pos), '-', COLOR_DEFAULT);
-		pos.row = STA_HEIGHT - 1;
+		pos.x = STA_HEIGHT - 1;
 		printc(padd(sta_pos, pos), '-', COLOR_DEFAULT);
 	}
 
 	for (int i = 1; i < STA_HEIGHT - 1; i++) {
 		POSITION pos = { i, 0 };
 		printc(padd(sta_pos, pos), '|', COLOR_DEFAULT);
-		pos.column = STA_WIDTH - 1;
+		pos.y = STA_WIDTH - 1;
 		printc(padd(sta_pos, pos), '|', COLOR_DEFAULT);
 	}
 
@@ -394,21 +410,29 @@ void display_command_frame() {
 	for (int j = 1; j < CMD_WIDTH - 1; j++) {
 		POSITION pos = { 0, j };
 		printc(padd(ord_pos, pos), '-', COLOR_DEFAULT);
-		pos.row = CMD_HEIGHT - 1; 
+		pos.x = CMD_HEIGHT - 1;
 		printc(padd(ord_pos, pos), '-', COLOR_DEFAULT);
 	}
 
-	for (int i = 1; i < CMD_HEIGHT - 1; i++) { 
+	for (int i = 1; i < CMD_HEIGHT - 1; i++) {
 		POSITION pos = { i, 0 };
 		printc(padd(ord_pos, pos), '|', COLOR_DEFAULT);
-		pos.column = CMD_WIDTH - 1;
+		pos.y = CMD_WIDTH - 1;
 		printc(padd(ord_pos, pos), '|', COLOR_DEFAULT);
 	}
 	POSITION pos = { 1, 2 };
 	gotoxy(padd(ord_pos, pos));
 	set_color(14);
-	printf("commands");
+	printf("command");
 }
+
+
+void display_frame() {
+	display_system_frame();
+	display_state_frame();
+	display_command_frame();
+}
+
 
 // 재출력
 void re_display(RESOURCE resource,
@@ -416,7 +440,7 @@ void re_display(RESOURCE resource,
 	CURSOR cursor) {
 	set_color(COLOR_DEFAULT);
 	system("cls");
-	dispaly_frame();
+	display_frame();
 	display_resource(resource);
 
 	for (int i = 0; i < MAP_HEIGHT; i++) {
@@ -430,46 +454,10 @@ void re_display(RESOURCE resource,
 	}
 }
 
-
-
-// 미완
-/*
-void BFS(CURSOR cursor) {
-	int x = cursor.current.row;
-	int y = cursor.current.column;
-	char ch = map[0][x][y]; 
-	if (ch == ' ') {
-		display_system_message("구조물이 없습니다.");
-		return;
-	}
-
-	POSITION Q[MAP_WIDTH * MAP_HEIGHT];
-	bool vist[MAP_WIDTH][MAP_HEIGHT] = { 0 };
-	int head = 0, tail = 0;
-
-	Q[tail++] = cursor.current;
-	vist[cursor.current.row][cursor.previous.column] = 1;
-	change_condition[x][y] = 1;
-	map_color[x][y].previous = map_color[x][y].current;
-	map_color[x][y].current = COLOR_GREEN;
-	while (head != tail) {
-		POSITION cur = Q[head++];
-
-		for (int i = 1; i <= 4; i++) {
-			DIRECTION dir = { i };
-			POSITION new_pos = pmove(cur, dir);
-			int nx = new_pos.row;
-			int ny = new_pos.column;
-
-			if (nx < 1 || nx > MAP_HEIGHT - 2 || ny < 1 || ny > MAP_WIDTH - 2) continue;
-			if (vist[nx][ny] || map[0][nx][ny] != ch) continue;
-
-			vist[nx][ny] = 1;
-			Q[tail++] = new_pos;
-			change_condition[nx][ny] = 1;
-			map_color[nx][ny].previous = map_color[nx][ny].current;
-			map_color[nx][ny].current = COLOR_GREEN;
-		}
-	}
+// select
+void select_object(CURSOR cursor) {
+	if (map_color[0][cursor.x][cursor.y] == COLOR_RED) return;
+	selection = backbuf[cursor.x][cursor.y];
+	display_command(cursor);
+	display_object_info(cursor);
 }
-*/
