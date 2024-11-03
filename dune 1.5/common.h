@@ -11,30 +11,32 @@
 /* ================= system parameters =================== */
 #define TICK 10		// time unit(ms)
 
-#define N_LAYER 3
-#define N_C_LAYER 4  // 최상위 레이어는 커서
+
 #define MAP_WIDTH	60
-#define MAP_HEIGHT	18
+#define MAP_HEIGHT  16
 
-#define SYS_WIDTH	MAP_WIDTH 
-#define SYS_HEIGHT	MAP_HEIGHT / 2
+// 한칸을 띄우고 출력하기 때문에 한줄에 출력할 수 있는 크기는 너비 - 1
+#define SYS_WIDTH	MAP_WIDTH  
+#define SYS_HEIGHT	MAP_HEIGHT / 2 
 
-#define STA_WIDTH	MAP_WIDTH * 6/7
-#define STA_HEIGHT	MAP_HEIGHT
+#define STA_WIDTH	MAP_WIDTH * 6/7 
+#define STA_HEIGHT	MAP_HEIGHT 
 
 #define CMD_WIDTH	STA_WIDTH 
 #define CMD_HEIGHT	SYS_HEIGHT
 
+
 /* ================= game data =================== */
-#define OBJ_NUM 1
+#define OBJ_NUM 2
+#define STR_NUM 3
 #define MAX_TAIL 5
+#define MAX_OBJ 10
 
 /* ================= 위치와 방향 =================== */
 // 맵에서 위치를 나타내는 구조체
 typedef struct {
 	int x, y;
-} POSITION, CURSOR; 
-
+} POSITION;
 
 
 // 입력 가능한 키 종류.
@@ -48,7 +50,7 @@ typedef enum {
 	k_space,
 	k_esc,
 	k_test,
-	k_1, 
+	k_1,
 	k_w,
 	k_h
 } KEY;
@@ -96,10 +98,9 @@ typedef struct {
 	int spice_max;  // 스파이스 최대 저장량
 	int population; // 현재 인구 수
 	int population_max;  // 수용 가능한 인구 수
-} RESOURCE;
+}RESOURCE;
 
-
-// 유닛 구조체
+// 
 typedef
 struct {
 	int size;
@@ -111,58 +112,80 @@ typedef
 struct {
 	int size;
 	char message[3][100];
-}ORDER_MESSAGE;
-
-typedef struct {
-	int layer;
-	POSITION pos;		// 현재 위치(position)
-	POSITION dest;		// 목적지(destination)
-	char repr;			// 화면에 표시할 문자(representation)
-	int color;
-	int len;
-	int speed;			// 움직이는 주기
-	int next_move_time;	// 다음에 움직일 시간
-	STATE_MESSAGE state_message;
-	ORDER_MESSAGE order_message;
-}OBJECT;
-
-typedef struct { // 20바이트
-	int hp;
-	POSITION pos;
-	POSITION dest; 
-}PRIVATE;
+}CMD_MESSAGE;
 
 
-typedef struct {
-	char mother;
-	int cost;
-	int population; 
-	int size;
-	int layer;
-	char repr;			
-	int color;
-	int speed;			
-	int next_move_time;	
-
-	STATE_MESSAGE state_message;
-	ORDER_MESSAGE order_message;
-
-	PRIVATE object[10];  // 각 유닛 정보
-}OBJECTS;
-
-typedef struct {
+// 개별 유닛 정보
+typedef
+struct {
 	char repr;
+	char name[30];
+	int color;
 	int cost;
+	int population;
+	int damage;
+	int max_hp;
+	int move_period;
+	int attack_period;
+	STATE_MESSAGE state_message;
+	CMD_MESSAGE cmd_message;
+}UNIT_INFO;
+
+typedef
+struct {
+	bool exist;
+	POSITION pos;
+	POSITION dest;
 	int hp;
-	int size;     // 한변의 길이
-	POSITION pos; // 좌상단 좌표
+	int next_move_time;
+	int next_attack_time;
+	UNIT_INFO* info_p;
+}UNIT;
 
-	STATE_MESSAGE state_message; 
-	ORDER_MESSAGE order_message;
+typedef
+struct {
+	char repr;
+	char name[20];
+	int color;
+	int cost;
+	int size;
+	int max_hp;
+	STATE_MESSAGE state_message;
+	CMD_MESSAGE cmd_message;
+}BUILDING_INFO;
 
-	PRIVATE structure[10];
-}STRUCTURE;
+typedef
+struct {
+	bool exist;
+	POSITION pos;
+	int hp;
+	BUILDING_INFO* info_p;
+}BUILDING;
 
+typedef
+struct {
+	char repr;
+	int color;
+	STATE_MESSAGE state_message;
+}NATURE_INFO;
+
+
+typedef
+struct {
+	char repr;
+	int color;
+	int move_period;
+	int next_move_time;
+	POSITION pos;
+	POSITION dest;
+	STATE_MESSAGE state_message;
+}SKY;
+
+typedef
+struct {
+	POSITION pos;
+	char repr;
+}SELECTION;
 
 
 #endif
