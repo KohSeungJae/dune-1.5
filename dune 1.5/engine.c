@@ -5,48 +5,55 @@
 #include "io.h"
 #include "display.h"
 
-
-void intro(void);
-void outro(void);
-void cursor_move(DIRECTION dir, int n);
-
 /* ================= control =================== */
 int sys_clock = 0;
 POSITION cursor = { 0, 0 };
-SELECTION selection = { 0 };
-
-/* ================= game data =================== */
 RESOURCE resource = {
 	.spice = 100,
 	.spice_max = 100,
 	.population = 5,
 	.population_max = 100
 };
-UNIT unit_map[MAP_HEIGHT][MAP_WIDTH] = { 0 };
-BUILDING building_map[MAP_HEIGHT][MAP_WIDTH] = { 0 };
-NATURE_INFO* nature_map[MAP_HEIGHT][MAP_WIDTH] = { 0 };
-SKY eagle = {
-	.pos = {4, 0},
-	.dest = {5, MAP_WIDTH - 1},
-	.move_period = 500,
-	.color = COLOR_PURPLE,
-	.repr = 'E',
-	.state_message = {
-		.about_size = 2,
-		.size = 2,
-		.message = {
-			"[사막독수리]",
-			"이 사막에서 가장 평화로운 존재이다."
-		}
-	}
-};
+SELECTION selection = { 0 };
+
+
+/* ================= game data =================== */
+NATURE_INFO* map[MAP_HEIGHT][MAP_WIDTH];
+SANDWORM sandworm[2];
+UNIT units[100] = { 0 }; // 유닛 연결 리스트
+BUILDING buildings[100] = { 0 }; // 빌딩 연결 리스트
+int unit_unused = 1;
+int building_unused = 1;
 bool map_change[MAP_HEIGHT][MAP_WIDTH] = { 0 };
 
 
 UNIT_INFO
+error_n = {
+	.repr = 'u',
+	.name = "유닛 에러",
+	.color = COLOR_RED,
+	.cost = 5,
+	.population = 5,
+	.max_hp = 70,
+	.move_period = 2000,
+	.state_message = {
+		.size = 1,
+		.about_size = 1,
+		.message = {
+			"유닛 에러"
+		}
+	},
+	.cmd_message = {
+		.size = 1,
+		.message = {
+			"유닛 에러"
+		}
+	}
+},
 b_havester_info = {
 	.repr = 'H',
 	.name = "하베스터",
+	.mother = 'B',
 	.color = COLOR_BLUE,
 	.cost = 5,
 	.population = 5,
@@ -118,6 +125,27 @@ sandworm_info = {
 };
 
 BUILDING_INFO
+error_b = {
+	.repr = 'b',
+	.name = "건물 에러",
+	.color = COLOR_BLUE,
+	.cost = 0,
+	.size = 2,
+	.max_hp = 50,
+	.state_message = {
+		.size = 1,
+		.about_size = 1,
+		.message = {
+			"건물 에러"
+		}
+	},
+	.cmd_message = {
+		.size = 1,
+		.message = {
+			"건물 에러"
+		}
+	}
+},
 b_base_info = {
 	.repr = 'B',
 	.name = "본진",
@@ -234,38 +262,204 @@ rock_info = {
 };
 
 
+EAGLE eagle = {
+	.pos = {4, 0},
+	.dest = {5, MAP_WIDTH - 1},
+	.move_period = 500,
+	.color = COLOR_PURPLE,
+	.repr = 'E',
+	.state_message = {
+		.about_size = 2,
+		.size = 2,
+		.message = {
+			"[사막독수리]",
+			"이 사막에서 가장 평화로운 존재이다."
+		}
+	}
+};
+STORM storm = {
+	.exist = 0,
+	.pos = {MAP_HEIGHT - 2, MAP_WIDTH / 2},
+	.repr = "STOM",
+	.color = COLOR_DY,
+	.next_move_time = 5000,
+	.exist_time = 5000,
+	.state_message = {
+		.size = 3,
+		.about_size = 3,
+		.message = {
+			"[모래폭풍]",
+			"사나운 모래폭풍",
+			"주기적으로 생성된다."
+		}
+	}
+};
+
 
 /* ================= utility =================== */
-POSITION Q[MAP_HEIGHT * MAP_WIDTH]; 
-int dist[MAP_HEIGHT][MAP_WIDTH];	
+POSITION Q[MAP_HEIGHT * MAP_WIDTH];
+int dist[MAP_HEIGHT][MAP_WIDTH];
 int double_click_distance = 5;
 int vist_timer = -1;
 KEY prev_key;
 bool sand_worm_on = 0;
 bool unit_exist = 1;
+bool storm_on = 1;
 
-/* ================= function =================== */
-BUILDING new_building(BUILDING_INFO* building_info, POSITION pos) {
-	return (BUILDING) {
-		.exist = 1,
-			.pos = pos,
-			.hp = building_info->max_hp,
-			.info_p = building_info
-	};
+// 유닛 & 빌딩을 연결리스트에 추가
+void unit_push(UNIT_INFO* info, POSITION pos);
+void unit_erase(POSITION pos);
+void building_push(BUILDING_INFO* info, POSITION pos);
+void building_erase(POSITION pos);
+// init
+inline void init_rock(POSITION pos);
+inline void init_4rock(POSITION pos);
+inline void init_total_rock();
+void init();
+// 커서 이동
+void cursor_move(DIRECTION dir, int n);
+// 선택
+char get_repr(POSITION pos);
+void select1();
+// 유닛공격
+void attack_unit(UNIT_INFO* attacker, UNIT* victim);
+// 샌드웜 관련
+bool set_sandworm_dest(SANDWORM* sandworm);
+int find_min_dist(POSITION pos, POSITION dest);
+DIRECTION get_min_dir(POSITION pos, POSITION dest);
+void sandworm_move(SANDWORM* sandworm);
+void sandworm_emission(SANDWORM* sandworm);
+// 유닛 생성 함수
+POSITION get_position(POSITION building_pos);
+void make_unit(UNIT_INFO* unit_info);
+// 독수리&모래폭풍
+void eagle_move(EAGLE* eagle);
+void storm_move();
+// 객체 이동
+inline void units_move();
+
+int main(void) {
+	srand((unsigned int)time(NULL));
+	init();
+	display();
+
+	while (1) {
+		KEY key = get_key();
+
+		if (vist_timer != -1 && vist_timer > 80) { // 80ms 이내에 다시 클릭이 이뤄지지 않았을때 
+			cursor_move(ktod(prev_key), 1);
+		}
+		// 방향키 입력이 있으면 처리
+		if (is_arrow_key(key)) {
+			if (vist_timer == -1) {
+				vist_timer = 0;
+				prev_key = key;
+			}
+			else {
+				if (prev_key == key)
+					cursor_move(ktod(key), double_click_distance);
+				else
+					cursor_move(ktod(key), 1);
+			}
+		}
+		else {
+			// 방향키 외의 입력
+			switch (key) {
+			case k_space: select1(); break;
+			case k_h: make_unit(&b_havester_info); break;
+			case k_re_dis: re_display(); break;
+			case k_none:
+			case k_undef:
+			default: break;
+			}
+		}
+
+		units_move();
+		display_time();
+		display_map();
+
+		Sleep(TICK);
+		sys_clock += 10;
+		if (vist_timer != -1) vist_timer += 10;
+	}
+
+
+	return 0;
 }
-UNIT new_unit(UNIT_INFO* unit_info, POSITION pos) {
-	return (UNIT) {
-		.exist = 1,
-			.pos = pos,
-			.dest = { -1, -1 },
-			.next_move_time = unit_info->move_period,
-			.next_attack_time = unit_info->attack_period,
-			.hp = unit_info->max_hp,
-			.info_p = unit_info
-	};
+
+// 유닛 & 빌딩을 연결리스트에 추가
+void unit_push(UNIT_INFO* info, POSITION pos) {
+	units[unit_unused].exist = 1;
+	units[unit_unused].pos = pos;
+	units[unit_unused].hp = info->max_hp;
+	units[unit_unused].info_p = info;
+
+	// 비어있는 칸
+	int idx = 0;
+	while (units[idx].exist) {
+		idx++;
+	}
+
+	units[unit_unused].next = idx;
+	units[idx].pre = unit_unused;
+	unit_unused = idx;
+
+	// 
+	map_change[pos.x][pos.y] = 1;
 }
+void unit_erase(POSITION pos) { // 해당 위치의 유닛 삭제
+	int idx = 0;
+	while (units[idx].exist) {
+		if (units[idx].pos.x == pos.x && units[idx].pos.y == pos.y) break;
+		idx = units[idx].next;
+	}
+	if (idx == 0 || !units[idx].exist) return;
+
+	int pre = units[idx].pre;
+	int next = units[idx].next;
+
+	units[idx].exist = 0;
+	units[pre].next = next;
+	units[next].pre = pre;
+
+	map_change[pos.x][pos.y] = 1;
+}
+
+void building_push(BUILDING_INFO* info, POSITION pos) {
+	buildings[building_unused].exist = 1;
+	buildings[building_unused].pos = pos;
+	buildings[building_unused].hp = info->max_hp;
+	buildings[building_unused].info_p = info;
+
+	// 비어있는 칸
+	int idx = 0;
+	while (buildings[idx].exist) {
+		idx++;
+	}
+
+	buildings[building_unused].next = idx;
+	buildings[idx].pre = building_unused;
+	building_unused = idx;
+}
+void building_erase(POSITION pos) { // 해당 위치의 유닛 삭제 
+	int idx = 0;
+	while (buildings[idx].exist) {
+		if (buildings[idx].pos.x == pos.x && buildings[idx].pos.y == pos.y) break;
+		idx = buildings[idx].next;
+	}
+	if (idx == 0 || !buildings[idx].exist) return;
+
+	int pre = buildings[idx].pre;
+	int next = buildings[idx].next;
+
+	buildings[idx].exist = 0;
+	buildings[pre].next = next;
+	buildings[next].pre = pre;
+}
+
+// init
 inline void init_rock(POSITION pos) {
-	nature_map[pos.x][pos.y] = &rock_info;
+	map[pos.x][pos.y] = &rock_info;
 }
 inline void init_4rock(POSITION pos) {
 	for (int i = pos.x; i < pos.x + 2; i++) {
@@ -283,17 +477,95 @@ inline void init_total_rock() {
 	init_rock(pos[3]);
 	init_rock(pos[4]);
 }
-void unit_move(POSITION pos, POSITION dest) {
-	if (pos.x == dest.x && pos.y == dest.y) {
+void init() {
+	units[0].exist = 1;
+	units[0].next = 1;
+	units[0].info_p = &error_n;
+	units[1].pre = 0;
+	buildings[0].exist = 1;
+	buildings[0].next = 1;
+	buildings[0].info_p = &error_b;
+	buildings[1].pre = 0;
+
+	// init unit
+	unit_push(&b_havester_info, (POSITION) { MAP_HEIGHT - 3, 0 });
+	unit_push(&r_havester_info, (POSITION) { 2, MAP_WIDTH - 1 });
+	// init building
+	building_push(&b_base_info, (POSITION) { MAP_HEIGHT - 2, 0 });
+	building_push(&r_base_info, (POSITION) { 0, MAP_WIDTH - 2 });
+	building_push(&b_plate_info, (POSITION) { MAP_HEIGHT - 2, 2 });
+	building_push(&r_plate_info, (POSITION) { 0, MAP_WIDTH - 4 });
+	building_push(&spice_info, (POSITION) { MAP_HEIGHT - 5, 0 });
+	building_push(&spice_info, (POSITION) { 4, MAP_WIDTH - 1 });
+
+
+	sandworm[0].pos = (POSITION){ 0,0 };
+	sandworm[1].pos = (POSITION){ MAP_HEIGHT - 1, MAP_WIDTH - 1 };
+	for (int i = 0; i < 2; i++) {
+		sandworm[i].hp = sandworm_info.max_hp;
+		sandworm[i].len = 1;
+		sandworm[i].info_p = &sandworm_info;
+		sandworm[i].next_move_time = sandworm_info.move_period;
+		sandworm[i].next_attack_time = sandworm_info.attack_period;
+		sandworm[i].next_emission_time = 20000;
+	}
+
+
+	for (int r = 0; r < MAP_HEIGHT; r++) {
+		for (int c = 0; c < MAP_WIDTH; c++) {
+			map[r][c] = &desert_info;
+		}
+	}
+	init_total_rock();
+
+	// cursor
+}
+
+// 커서 이동
+void cursor_move(DIRECTION dir, int n) { // 방향, 움직일 칸수
+	vist_timer = -1;
+	if (n == 0) {
 		return;
 	}
-	unit_map[dest.x][dest.y] = unit_map[pos.x][pos.y];
-	unit_map[dest.x][dest.y].pos = dest;
-	unit_map[pos.x][pos.y].exist = 0;
 
-	map_change[pos.x][pos.y] = 1;
-	map_change[dest.x][dest.y] = 1;
+	POSITION curr = cursor;
+	POSITION new_pos = pmove(curr, dir);
+	// validation check
+	if (0 <= new_pos.x && new_pos.x < MAP_HEIGHT && \
+		0 <= new_pos.y && new_pos.y < MAP_WIDTH) {
+
+		map_change[cursor.x][cursor.y] = 1;
+		cursor = new_pos;
+		map_change[cursor.x][cursor.y] = 1;
+
+		cursor_move(dir, n - 1);
+	}
 }
+
+// 선택
+char get_repr(POSITION pos) { // 해당 위치에 있는 객체의 문자를 가져오는 함수. 
+	int idx = get_unit_idx(pos);
+	if (idx) {
+		return units[idx].info_p->repr;
+	}
+	idx = get_sandworm_idx(pos);
+	if (idx != 3) {
+		return sandworm[idx].info_p->repr;
+	}
+	idx = get_building_idx(pos);
+	if (idx) {
+		return buildings[idx].info_p->repr;
+	}
+	return map[pos.x][pos.y]->repr;
+}
+void select1() { // 스페이스바 입력시, 해당 위치와 해당 객체의 문자를 저장, 상태창, 명령창 출력.
+	selection.pos = cursor;
+	selection.repr = get_repr(cursor);
+	dispaly_state_message(selection.pos);
+	display_cmd_message(selection.pos);
+}
+
+// 유닛 공격
 void attack_unit(UNIT_INFO* attacker, UNIT* victim) {
 	(*victim).hp = ((*victim).hp - attacker->damage <= 0) ? 0 : (*victim).hp - attacker->damage;
 
@@ -301,84 +573,14 @@ void attack_unit(UNIT_INFO* attacker, UNIT* victim) {
 	snprintf(buff, 100, "%s가 %s에게 공격당했습니다. (남은체력 : %d)", (*victim).info_p->name, attacker->name, (*victim).hp);
 	display_system_message(buff);
 	if ((*victim).hp == 0) {
-		(*victim).exist = 0;
-		map_change[(*victim).pos.x][(*victim).pos.y] = 1;
+		unit_erase((*victim).pos);
 		snprintf(buff, 100, "%s가 한줌의 모래로 돌아갔습니다.", (*victim).info_p->name);
 		display_system_message(buff);
 	}
 }
-void init_maps() {
-	// init buildings
-	for (int i = MAP_HEIGHT - 2; i < MAP_HEIGHT; i++) {
-		for (int j = 0; j < 2; j++) {
-			building_map[i][j] = new_building(&b_base_info, (POSITION) { MAP_HEIGHT - 2, 0 });
-		}
-		for (int j = 2; j < 4; j++) {
-			building_map[i][j] = new_building(&b_plate_info, (POSITION) { MAP_HEIGHT - 2, 2 });
-		}
-	}
-	for (int i = 0; i < 2; i++) {
-		for (int j = MAP_WIDTH - 4; j < MAP_WIDTH - 2; j++) {
-			building_map[i][j] = new_building(&r_plate_info, (POSITION) { 0, MAP_WIDTH - 4 });
-		}
-		for (int j = MAP_WIDTH - 2; j < MAP_WIDTH; j++) {
-			building_map[i][j] = new_building(&r_base_info, (POSITION) { 0, MAP_WIDTH - 2 });
-		}
-	}
-	building_map[MAP_HEIGHT - 5][0] = new_building(&spice_info, (POSITION) { MAP_HEIGHT - 5, 0 });
-	building_map[4][MAP_WIDTH - 1] = new_building(&spice_info, (POSITION) { 4, MAP_WIDTH - 1 });
 
-	// init units
-	unit_map[MAP_HEIGHT - 3][0] = new_unit(&b_havester_info, (POSITION) { MAP_HEIGHT - 3, 0 });
-	unit_map[2][MAP_WIDTH - 1] = new_unit(&r_havester_info, (POSITION) { 2, MAP_WIDTH - 1 });
-
-	// sandworm
-	unit_map[0][0] = new_unit(&sandworm_info, (POSITION) { 0, 0 });
-	unit_map[MAP_HEIGHT - 1][MAP_WIDTH - 1] = new_unit(&sandworm_info, (POSITION) { MAP_HEIGHT - 1, MAP_WIDTH - 1 });
-
-	// init nature
-	for (int r = 0; r < MAP_HEIGHT; r++) {
-		for (int c = 0; c < MAP_WIDTH; c++) {
-			nature_map[r][c] = &desert_info;
-		}
-	}
-	init_total_rock();
-
-
-
-	// map_change 초기상태 1
-	for (int r = 0; r < MAP_HEIGHT; r++) {
-		for (int c = 0; c < MAP_WIDTH; c++) {
-			map_change[r][c] = 1;
-		}
-	}
-}
-
-
-// select
-char get_repr(POSITION pos) {
-	if (eagle.pos.x == pos.x && eagle.pos.y == pos.y) {
-		return eagle.repr;
-	}
-	else if (unit_map[pos.x][pos.y].exist) {
-		return unit_map[pos.x][pos.y].info_p->repr;
-	}
-	else if (building_map[pos.x][pos.y].exist) {
-		return building_map[pos.x][pos.y].info_p->repr;
-	}
-	else {
-		return nature_map[pos.x][pos.y]->repr;
-	}
-}
-void select1() {
-	selection.pos = cursor;
-	selection.repr = get_repr(cursor);
-	dispaly_state_message(selection.pos);
-	display_cmd_message(selection.pos);
-}
-
-// 샌드웜
-bool set_sandworm_dest(UNIT* sandworm) { // 너비우선탐색으로 가장 가까운 유닛을 탐색하고, 목적지로 설정하는 함수. 
+// 샌드웜 관련 함수
+bool set_sandworm_dest(SANDWORM* sandworm) { // 너비우선탐색으로 가장 가까운 유닛을 탐색하고, 목적지로 설정. 
 	for (int i = 0; i < MAP_HEIGHT; i++) {
 		for (int j = 0; j < MAP_WIDTH; j++) {
 			dist[i][j] = -1;
@@ -390,23 +592,23 @@ bool set_sandworm_dest(UNIT* sandworm) { // 너비우선탐색으로 가장 가�
 	dist[(*sandworm).pos.x][(*sandworm).pos.y] = 0;
 
 	while (head != tail) {
-		POSITION cur = Q[head++];
+		POSITION pos = Q[head++];
 
 		for (int i = 1; i <= 4; i++) {
-			POSITION ncur = pmove(cur, i);
+			POSITION npos = pmove(pos, i);
 
-			if (ncur.x < 0 || ncur.x >= MAP_HEIGHT || ncur.y < 0 || ncur.y >= MAP_WIDTH || dist[ncur.x][ncur.y] != -1) continue;
-			if (building_map[ncur.x][ncur.y].exist || nature_map[ncur.x][ncur.y]->repr == 'R') continue;
-			if (unit_map[ncur.x][ncur.y].exist) {
-				if (unit_map[ncur.x][ncur.y].info_p->repr == 'W') continue;
+			if (npos.x < 0 || npos.x >= MAP_HEIGHT || npos.y < 0 || npos.y >= MAP_WIDTH || dist[npos.x][npos.y] != -1) continue;
+			if (get_building_idx(npos) || map[npos.x][npos.y]->repr == 'R') continue;
+			if (get_unit_idx(npos)) {
+				if (get_sandworm_idx(npos) != 3) continue;
 				else {
-					(*sandworm).dest = ncur;
+					(*sandworm).dest = npos;
 					return 1;
 				}
 			}
 
-			dist[ncur.x][ncur.y] = dist[cur.x][cur.y] + 1;
-			Q[tail++] = ncur;
+			dist[npos.x][npos.y] = dist[pos.x][pos.y] + 1;
+			Q[tail++] = npos;
 		}
 	}
 	return 0;
@@ -425,19 +627,19 @@ int find_min_dist(POSITION pos, POSITION dest) { // 너비우선탐색으로 목
 	dist[pos.x][pos.y] = 0;
 
 	while (head != tail) {
-		POSITION cur = Q[head++];
+		POSITION pos = Q[head++];
 		for (int i = 1; i <= 4; i++) {
-			POSITION ncur = pmove(cur, i);
+			POSITION npos = pmove(pos, i);
 
-			if (ncur.x < 0 || ncur.x >= MAP_HEIGHT || ncur.y < 0 || ncur.y >= MAP_WIDTH || dist[ncur.x][ncur.y] != -1) continue;
-			if (building_map[ncur.x][ncur.y].exist || nature_map[ncur.x][ncur.y]->repr == 'R' || \
-				(unit_map[ncur.x][ncur.y].exist && unit_map[ncur.x][ncur.y].info_p->repr == 'W')) continue;
-			if (ncur.x == dest.x && ncur.y == dest.y) {
-				return dist[cur.x][cur.y] + 1;
+			if (npos.x < 0 || npos.x >= MAP_HEIGHT || npos.y < 0 || npos.y >= MAP_WIDTH || dist[npos.x][npos.y] != -1) continue;
+			if (map[npos.x][npos.y]->repr == 'R' || get_sandworm_idx(npos) != 3 || \
+				get_building_idx(npos)) continue;
+			if (npos.x == dest.x && npos.y == dest.y) {
+				return dist[pos.x][pos.y] + 1;
 			}
 
-			dist[ncur.x][ncur.y] = dist[cur.x][cur.y] + 1;
-			Q[tail++] = ncur;
+			dist[npos.x][npos.y] = dist[pos.x][pos.y] + 1;
+			Q[tail++] = npos;
 		}
 	}
 	return -1; // 목적지에 샌드웜이 있을 경우 
@@ -451,7 +653,8 @@ DIRECTION get_min_dir(POSITION pos, POSITION dest) { // 현재 위치에서 상�
 		int nx = next_pos.x;
 		int ny = next_pos.y;
 		if (nx < 0 || nx >= MAP_HEIGHT || ny < 0 || ny >= MAP_WIDTH) continue;
-		if (building_map[nx][ny].exist || nature_map[nx][ny]->repr == 'R' || (unit_map[nx][ny].exist && unit_map[nx][ny].info_p->repr == 'W')) continue;
+		if (map[nx][ny]->repr == 'R' || get_sandworm_idx(next_pos) != 3 || \
+			get_building_idx(next_pos))continue;
 
 		int tmp = find_min_dist(next_pos, dest); // 목적지까지의 거리를 반환 
 		if (tmp < min_dist) { // 가장 짧은 거리를 저장
@@ -465,10 +668,11 @@ DIRECTION get_min_dir(POSITION pos, POSITION dest) { // 현재 위치에서 상�
 	else
 		return dir;
 }
-void sandworm_move(UNIT* sandworm) {
+void sandworm_move(SANDWORM* sandworm) {
 	if (sys_clock < (*sandworm).next_move_time) return;
 	(*sandworm).next_move_time = sys_clock + (*sandworm).info_p->move_period;
 
+	// 목적지 설정
 	unit_exist = set_sandworm_dest(sandworm);
 
 	if (!unit_exist && (*sandworm).pos.x == (*sandworm).dest.x && (*sandworm).pos.y == (*sandworm).dest.y) {
@@ -476,27 +680,108 @@ void sandworm_move(UNIT* sandworm) {
 		do {
 			nx = rand() % (MAP_HEIGHT - 2) + 1;
 			ny = rand() % (MAP_WIDTH - 2) + 1;
-		} while (building_map[nx][ny].exist || (unit_map[nx][ny].exist && unit_map[nx][ny].info_p->repr == 'W') || nature_map[nx][ny]->repr == 'R');
+		} while (map[nx][ny]->repr == 'R' || get_sandworm_idx((POSITION) { nx, ny }) != 3 || \
+			get_building_idx((POSITION) { nx, ny }));
 
 		POSITION new_pos = { nx, ny };
 		(*sandworm).dest = new_pos;
 	}
 
+	// 방향 설정
 	DIRECTION dir = get_min_dir((*sandworm).pos, (*sandworm).dest);
 	POSITION next_pos = pmove((*sandworm).pos, dir);
 	if (unit_exist && next_pos.x == (*sandworm).dest.x && next_pos.y == (*sandworm).dest.y) {
 		if (sys_clock >= (*sandworm).next_attack_time) {
-			attack_unit(&sandworm_info, &unit_map[next_pos.x][next_pos.y]);
+			(*sandworm).next_attack_time = sys_clock + sandworm_info.attack_period;
+			int idx = get_unit_idx(next_pos);
+			attack_unit(&sandworm_info, &units[idx]);
 		}
-		else {
+		else { // 유닛 앞에 도착했지만 공격주기가 되지 않았을경우.
 			display_system_message("샌드웜이 공격을 준비중입니다!");
 		}
 	}
 	else {
-		unit_move((*sandworm).pos, next_pos);
+		map_change[(*sandworm).pos.x][(*sandworm).pos.y] = 1;
+		(*sandworm).pos = next_pos;
+		map_change[(*sandworm).pos.x][(*sandworm).pos.y] = 1;
 	}
 }
-void eagle_move(SKY* eagle) {
+void sandworm_emission(SANDWORM* sandworm) {
+	if (sys_clock < (*sandworm).next_emission_time) return;
+	(*sandworm).next_emission_time += (rand() % 300 + 100) * 1000;
+	building_push(&spice_info, (*sandworm).pos);
+	int idx = get_building_idx((*sandworm).pos);
+	buildings[idx].hp = rand() % 9 + 1;
+	char buff[100];
+	snprintf(buff, 100, "샌드웜이 스파이스를 배출했습니다.(매장량 : %d)", buildings[idx].hp);
+	display_system_message(buff);
+	snprintf(buff, 100, "다음 배출 시간 : %d : %d : %d",
+		(*sandworm).next_emission_time / 60000,
+		((*sandworm).next_emission_time / 1000) % 60,
+		((*sandworm).next_emission_time / 10) % 60);
+	display_system_message(buff);
+}
+
+// 유닛 생성 함수
+POSITION get_position(POSITION building_pos) { // 유닛을 생성할때 생성위치를 반환
+	for (int i = 0; i < MAP_HEIGHT; i++) {
+		for (int j = 0; j < MAP_WIDTH; j++) {
+			dist[i][j] = -1;
+		}
+	}
+
+	int idx = get_building_idx(building_pos);
+	int head = 0, tail = 0;
+	for (int r = 0; r < 2; r++) {
+		for (int c = 0; c < 2; c++) {
+			Q[tail++] = padd(buildings[idx].pos, (POSITION) { r, c });
+			dist[r][c] = 0;
+		}
+	}
+
+	while (head != tail) {
+		POSITION cur = Q[head++];
+		for (int dir = 1; dir <= 4; dir++) {
+			POSITION npos = pmove(cur, dir);
+
+			if (npos.x < 0 || npos.x >= MAP_HEIGHT || npos.y < 0 || npos.y >= MAP_WIDTH || dist[npos.x][npos.y] != -1) continue;
+			if (get_unit_idx(npos)) continue;
+			if (get_building_idx(npos)) continue;
+
+			return npos;
+		}
+	}
+	return (POSITION) { 0, MAP_HEIGHT - 1 };
+}
+void make_unit(UNIT_INFO* unit_info) { // 유닛을 올바른 위치에 추가하는 함수
+	int idx = get_building_idx(selection.pos);
+	if (buildings[idx].info_p->repr != unit_info->mother || buildings[idx].info_p->color == COLOR_RED) return;
+
+	POSITION pos = get_position(selection.pos);
+	if (pos.x == 0 && pos.y == MAP_HEIGHT - 1) {
+		display_system_message("유닛을 생산할 공간이 부족합니다.");
+		return;
+	}
+	if (resource.spice - unit_info->cost <= 0) {
+		display_system_message("스파이스가 부족합니다.");
+		return;
+	}
+	if (resource.population + unit_info->population >= resource.population_max) {
+		display_system_message("인구수가 부족합니다.");
+		return;
+	}
+
+	resource.spice -= unit_info->cost;
+	resource.population += unit_info->population;
+
+	unit_push(unit_info, pos);
+	char buff[100];
+	snprintf(buff, 100, "%s 생산완료.", unit_info->name);
+	display_system_message(buff);
+}
+
+// 독수리&모래폭풍
+void eagle_move(EAGLE* eagle) {
 	if (sys_clock < (*eagle).next_move_time) return;
 	(*eagle).next_move_time = sys_clock + (*eagle).move_period;
 
@@ -524,196 +809,79 @@ void eagle_move(SKY* eagle) {
 	map_change[(*eagle).pos.x][(*eagle).pos.y] = 1;
 	map_change[next_pos.x][next_pos.y] = 1;
 	(*eagle).pos = next_pos;
+}
+void storm_move() {
+	if (!storm.exist && sys_clock < storm.exist_time) { // 생성시간이 되지 않음.
+		return;
+	}
 
+	if (!storm.exist && sys_clock >= storm.exist_time) { // 생성시간이 됨.
+		storm.exist = 1;
+		storm.exist_time = sys_clock + 5000; // 생성후 5000ms 동안 존재
+		display_system_message("모래폭풍이 발생했습니다!");
+		do {
+			storm.pos.x = rand() % MAP_HEIGHT;
+			storm.pos.y = rand() % (MAP_WIDTH - 16) + 8; // 본진 근처에는 생성되지 않음.
+		} while (storm.pos.x < 0 || storm.pos.x >= MAP_HEIGHT - 1 || storm.pos.y < 0 || storm.pos.y >= MAP_WIDTH - 1);
+
+		for (int r = 0; r < 2; r++) { // 맵 출력을 위해 map_change = 1 
+			for (int c = 0; c < 2; c++) {
+				POSITION pos = padd(storm.pos, (POSITION) { r, c });
+				map_change[pos.x][pos.y] = 1;
+			}
+		}
+	}
+
+	if (storm.exist && sys_clock >= storm.exist_time) { // 생성 후, 소멸 시간이 됨.
+		storm.exist = 0;
+		storm.exist_time += 30000; // 30초 뒤 재생성
+		storm.next_move_time += 30000;
+		display_system_message("모래폭풍이 소멸했습니다.");
+
+		for (int r = 0; r < 2; r++) { // 맵 출력을 위해 map_change = 1 
+			for (int c = 0; c < 2; c++) {
+				POSITION pos = padd(storm.pos, (POSITION) { r, c });
+				map_change[pos.x][pos.y] = 1;
+			}
+		}
+		return;
+	}
+
+	// 모래폭풍 이동
+	if (sys_clock < storm.next_move_time) return;
+	storm.next_move_time += 100;
+
+	DIRECTION dir;
+	POSITION n_pos;
+	do {
+		dir = rand() % 4 + 1;
+		n_pos = pmove(storm.pos, dir);
+	} while (n_pos.x < 0 || n_pos.x >= MAP_HEIGHT - 1 || n_pos.y < 0 || n_pos.y >= MAP_WIDTH - 1);
+
+
+	for (int r = 0; r < 2; r++) {
+		for (int c = 0; c < 2; c++) {
+			POSITION pos = padd(storm.pos, (POSITION) { r, c });
+			map_change[pos.x][pos.y] = 1;
+		}
+	}
+
+	storm.pos = n_pos;
+
+	for (int r = 0; r < 2; r++) {
+		for (int c = 0; c < 2; c++) {
+			POSITION pos = padd(storm.pos, (POSITION) { r, c });
+			map_change[pos.x][pos.y] = 1;
+		}
+	}
 }
 
 // 유닛 이동
-void units_move() {
-	bool exist[MAP_HEIGHT][MAP_WIDTH] = { 0 };
-	for (int r = 0; r < MAP_HEIGHT; r++) {
-		for (int c = 0; c < MAP_WIDTH; c++) {
-			exist[r][c] = unit_map[r][c].exist;
-		}
+inline void units_move() {
+	for (int i = 0; i < 2; i++) {
+		sandworm_emission(&sandworm[i]);
+		sandworm_move(&sandworm[i]);
 	}
-
-	for (int r = 0; r < MAP_HEIGHT; r++) {
-		for (int c = 0; c < MAP_WIDTH; c++) {
-			if (exist[r][c]) {
-				switch (unit_map[r][c].info_p->repr) {
-				case 'W': sandworm_move(&unit_map[r][c]); break;
-
-				}
-			}
-		}
-	}
-
 	eagle_move(&eagle);
+	storm_move();
 }
-
-// 유닛 생산
-POSITION get_position(POSITION pos) {
-	for (int i = 0; i < MAP_HEIGHT; i++) {
-		for (int j = 0; j < MAP_WIDTH; j++) {
-			dist[i][j] = -1;
-		}
-	}
-
-	int head = 0, tail = 0;
-	for (int r = 0; r < 2; r++) {
-		for (int c = 0; c < 2; c++) {
-			Q[tail++] = padd(building_map[pos.x][pos.y].pos, (POSITION) { r, c });
-			dist[r][c] = 0;
-		}
-	}
-
-	while (head != tail) {
-		POSITION cur = Q[head++];
-		for (int dir = 1; dir < 4; dir++) {
-			POSITION ncur = pmove(cur, dir);
-
-			if (ncur.x < 0 || ncur.x >= MAP_HEIGHT || ncur.y < 0 || ncur.y >= MAP_WIDTH || dist[ncur.x][ncur.y] != -1) continue;
-			if (unit_map[ncur.x][ncur.y].exist) continue;
-			if (building_map[ncur.x][ncur.y].exist && building_map[ncur.x][ncur.y].info_p->repr != 'P') continue;
-
-			return ncur;
-		}
-	}
-	return (POSITION) { 0, MAP_HEIGHT - 1 };
-}
-void make_unit(UNIT_INFO* unit_info, char repr) {
-	if (selection.repr != repr) return;
-
-	POSITION pos = get_position(selection.pos);
-	if (pos.x == 0 && pos.y == MAP_HEIGHT - 1) {
-		display_system_message("유닛을 생산할 공간이 부족합니다.");
-		return;
-	}
-	if (resource.spice - unit_info->cost <= 0) {
-		display_system_message("스파이스가 부족합니다.");
-		return;
-	}
-	if (resource.population + unit_info->population >= resource.population_max) {
-		display_system_message("인구수가 부족합니다.");
-		return;
-	}
-
-	resource.spice -= unit_info->cost;
-	resource.population += unit_info->population;
-
-	unit_map[pos.x][pos.y] = new_unit(&b_havester_info, pos);
-	map_change[pos.x][pos.y] = 1;
-	char buff[100];
-	snprintf(buff, 100, "%s 생산완료.", unit_info->name);
-	display_system_message(buff);
-}
-
-
-/* ================= main() =================== */
-int main(void) {
-	srand((unsigned int)time(NULL));
-
-	intro(); 
-	init_maps();
-	display_resource(resource);
-	display_frame();
-	display_map(cursor);
-
-	while (1) {
-		KEY key = get_key();
-
-		if (vist_timer != -1 && vist_timer > 80) { // 80ms 이내에 다시 클릭이 이뤄지지 않았을때
-			cursor_move(ktod(prev_key), 1);
-		}
-		// 방향키 입력이 있으면 처리
-		if (is_arrow_key(key)) {
-			if (vist_timer == -1) {
-				vist_timer = 0;
-				prev_key = key;
-			}
-			else {
-				if (prev_key == key)
-					cursor_move(ktod(key), double_click_distance);
-				else
-					cursor_move(ktod(key), 1);
-			}
-		}
-		else {
-			// 방향키 외의 입력
-			switch (key) {
-			case k_quit: outro();
-			case k_space: select1(); break;
-			case k_re_dis: re_display(resource, cursor, map_change); break;
-			case k_esc: esc(&selection); break;
-			case k_h: make_unit(&b_havester_info, 'B'); break;
-			case k_none:
-			case k_undef:
-			default: break;
-			}
-		}
-
-
-		units_move();
-		display_map(cursor);
-		display_resource(resource);
-		display_time();
-
-
-		Sleep(TICK);
-		sys_clock += 10;
-		if (vist_timer != -1) vist_timer += 10;
-	}
-}
-
-// setting
-void intro(void) {
-	POSITION pos = { 10, 53 };
-	gotoxy(pos);
-	printf("DUNE 1.5\n");
-
-	pos.x += 2;
-	pos.y = 27;
-	gotoxy(pos);
-
-	printf("화면이 깨진다면 맵 크기를 줄이거나 창을 전체화면으로 설정해 주세요.\n");
-
-	pos.x += 2;
-	pos.y = 40;
-	gotoxy(pos);
-	printf("r을 입력하면 화면이 다시 출력됩니다.\n");
-
-	pos.x += 5;
-	pos.y = 38;
-	gotoxy(pos);
-
-	printf("더블 클릭시 이동할 거리를 입력해주세요 : ");
-	scanf_s("%d", &double_click_distance);
-	system("cls");
-}
-void outro(void) {
-	set_color(COLOR_DEFAULT);
-	system("cls");
-	printf("exiting...\n");
-	exit(0);
-}
-
-// 커서 이동
-void cursor_move(DIRECTION dir, int n) { // 방향, 움직일 칸수
-	vist_timer = -1;
-	if (n == 0) {
-		return;
-	}
-
-	POSITION curr = cursor;
-	POSITION new_pos = pmove(curr, dir);
-	// validation check
-	if (0 <= new_pos.x && new_pos.x < MAP_HEIGHT && \
-		0 <= new_pos.y && new_pos.y < MAP_WIDTH) {
-
-		map_change[cursor.x][cursor.y] = 1;
-		cursor = new_pos;
-		map_change[cursor.x][cursor.y] = 1;
-
-		cursor_move(dir, n - 1);
-	}
-}
-

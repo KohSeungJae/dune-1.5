@@ -1,6 +1,3 @@
-/*
-* raw(?) I/O
-*/
 #include "io.h"
 
 void gotoxy(POSITION pos) { // 커서 이동함수
@@ -36,8 +33,8 @@ KEY get_key(void) { // 방향키 반환함수
 	case 'W':
 	case 'w': return k_w;
 	case 'H':
-	case 'h': return k_h; 
-	case '1': return k_1; 
+	case 'h': return k_h;
+	case '1': return k_1;
 	case 27: return k_esc;
 	case 32: return k_space;
 	case 224:

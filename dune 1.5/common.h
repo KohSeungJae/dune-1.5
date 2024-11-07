@@ -100,7 +100,7 @@ typedef struct {
 	int population_max;  // 수용 가능한 인구 수
 }RESOURCE;
 
-// 
+// message
 typedef
 struct {
 	int size;
@@ -114,19 +114,26 @@ struct {
 	char message[3][100];
 }CMD_MESSAGE;
 
+// selection
+typedef
+struct {
+	POSITION pos;
+	char repr;
+}SELECTION;
 
-// 개별 유닛 정보
+// 객체 정보
 typedef
 struct {
 	char repr;
 	char name[30];
+	char mother;
 	int color;
 	int cost;
 	int population;
 	int damage;
 	int max_hp;
 	int move_period;
-	int attack_period;
+	int attack_period; // 공격주기
 	STATE_MESSAGE state_message;
 	CMD_MESSAGE cmd_message;
 }UNIT_INFO;
@@ -140,6 +147,7 @@ struct {
 	int next_move_time;
 	int next_attack_time;
 	UNIT_INFO* info_p;
+	unsigned char pre, next;
 }UNIT;
 
 typedef
@@ -157,9 +165,11 @@ struct {
 typedef
 struct {
 	bool exist;
+	bool destroied;
 	POSITION pos;
 	int hp;
 	BUILDING_INFO* info_p;
+	unsigned char pre, next;
 }BUILDING;
 
 typedef
@@ -172,6 +182,18 @@ struct {
 
 typedef
 struct {
+	POSITION pos;
+	POSITION dest;
+	int len;
+	int hp;
+	int next_move_time;
+	int next_attack_time;
+	int next_emission_time;
+	UNIT_INFO* info_p;
+}SANDWORM;
+
+typedef
+struct {
 	char repr;
 	int color;
 	int move_period;
@@ -179,13 +201,17 @@ struct {
 	POSITION pos;
 	POSITION dest;
 	STATE_MESSAGE state_message;
-}SKY;
+}EAGLE;
 
 typedef
 struct {
+	bool exist;
 	POSITION pos;
-	char repr;
-}SELECTION;
-
+	char repr[4];
+	int color;
+	int next_move_time;
+	int exist_time;
+	STATE_MESSAGE state_message;
+}STORM;
 
 #endif
