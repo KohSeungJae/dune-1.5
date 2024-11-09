@@ -28,9 +28,10 @@ int get_unit_idx(POSITION pos);
 int get_sandworm_idx(POSITION pos);
 
 void display_system_message(char new_str[]);
-void dispaly_state_message(POSITION selection_pos);
+void display_state_message(POSITION selection_pos);
 void display_cmd_message(POSITION selection_pos);
 void re_display();
+void esc(SELECTION* selection);
 
 #endif
 #pragma once

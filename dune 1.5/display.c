@@ -316,7 +316,7 @@ STATE_MESSAGE* get_state_message(POSITION pos) { // 해당위치 객체의 state messag
 	}
 	return &map[pos.x][pos.y]->state_message;
 }
-void dispaly_state_message(POSITION selection_pos) {
+void display_state_message(POSITION selection_pos) {
 	for (int r = 0; r < STA_HEIGHT - 2; r++) {
 		erase_message(padd(state_pos, (POSITION) { 2 + r, 0 }), STA_WIDTH - 1);
 	}
@@ -344,7 +344,13 @@ void dispaly_state_message(POSITION selection_pos) {
 		gotoxy(padd(state_pos, pos));
 		printf("현재체력 : ");
 		for (int i = 0; i < buildings[idx].hp / 10; i++) printf("@");
-		printf(" (%d)", buildings[idx].hp);
+		if (buildings[idx].destroied) {
+			printf(" (%d, 반파됨)", buildings[idx].hp);
+
+		}
+		else {
+			printf(" (%d)", buildings[idx].hp);
+		}
 		return;
 	}
 	idx = get_unit_idx(selection_pos);
@@ -412,4 +418,17 @@ void re_display() {
 		}
 	}
 	display_map(cursor);
+}
+
+// 선택 취소
+void esc(SELECTION* selection) {
+	selection->pos = (POSITION){ 0, 0 };
+	selection->repr = ' ';
+
+	for (int r = 0; r < STA_HEIGHT - 2; r++) {
+		erase_message(padd(state_pos, (POSITION) { 2 + r, 0 }), STA_WIDTH - 1);
+	}
+	for (int r = 0; r < CMD_HEIGHT - 2; r++) {
+		erase_message(padd(cmd_pos, (POSITION) { 2 + r, 0 }), STA_WIDTH - 1);
+	}
 }

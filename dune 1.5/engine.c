@@ -335,11 +335,21 @@ void make_unit(UNIT_INFO* unit_info);
 // 독수리&모래폭풍
 void eagle_move(EAGLE* eagle);
 void storm_move();
+void storm_move_test();
+void storm_action(); 
 // 객체 이동
 inline void units_move();
+// 인트로 & 종료
+void intro();
+void outro();
+// test
+void test_message() {
+	display_system_message("test message");
+}
 
 int main(void) {
 	srand((unsigned int)time(NULL));
+	intro();
 	init();
 	display();
 
@@ -368,6 +378,9 @@ int main(void) {
 			case k_space: select1(); break;
 			case k_h: make_unit(&b_havester_info); break;
 			case k_re_dis: re_display(); break;
+			case k_esc: esc(&selection); break;
+			case k_quit: outro(); break;
+			case k_test: test_message(); break;
 			case k_none:
 			case k_undef:
 			default: break;
@@ -385,6 +398,35 @@ int main(void) {
 
 
 	return 0;
+}
+
+// 인트로 & 종료
+void intro() {
+	gotoxy((POSITION) { 8, 55 });
+	printf("DUNE 1.5");
+	gotoxy((POSITION) { 12, 35 });
+	printf("출력에 이상이 있을땐 r키를 누르면 화면이 재출력됩니다.");
+	gotoxy((POSITION) { 15, 48 });
+	printf("더블 클릭시 이동 거리 : ");
+	scanf_s("%d", &double_click_distance);
+	system("cls");
+}
+void outro() {
+	char e;
+	do {
+		display_system_message("종료하시겠습니까? (Y / N) : ");
+		bool poo = getchar();
+		scanf_s("%c", &e, 1);
+	} while (e != 'Y' && e != 'y' && e != 'n' && e != 'N');
+
+	if (e == 'Y' || e == 'y') {
+		display_system_message("게임을 종료합니다...");
+		Sleep(1000);
+		exit(0);
+	}
+	else {
+		display_system_message("게임을 재개합니다.");
+	}
 }
 
 // 유닛 & 빌딩을 연결리스트에 추가
@@ -561,7 +603,7 @@ char get_repr(POSITION pos) { // 해당 위치에 있는 객체의 문자를 가
 void select1() { // 스페이스바 입력시, 해당 위치와 해당 객체의 문자를 저장, 상태창, 명령창 출력.
 	selection.pos = cursor;
 	selection.repr = get_repr(cursor);
-	dispaly_state_message(selection.pos);
+	display_state_message(selection.pos);
 	display_cmd_message(selection.pos);
 }
 
@@ -875,13 +917,111 @@ void storm_move() {
 		}
 	}
 }
+void storm_move_test() {
+	if (!storm.exist && sys_clock < storm.exist_time) { // 생성시간이 되지 않음.
+		return;
+	}
 
+	if (!storm.exist && sys_clock >= storm.exist_time) { // 생성시간이 됨.
+		storm.exist = 1;
+		storm.exist_time = sys_clock + 5000; // 생성후 5000ms 동안 존재
+		display_system_message("모래폭풍이 발생했습니다!");
+
+		// 본진에 생성(파괴 테스트용)
+		storm.pos.x = MAP_HEIGHT-3;
+		storm.pos.y = 0; 
+
+
+		for (int r = 0; r < 2; r++) { // 맵 출력을 위해 map_change = 1 
+			for (int c = 0; c < 2; c++) {
+				POSITION pos = padd(storm.pos, (POSITION) { r, c });
+				map_change[pos.x][pos.y] = 1;
+			}
+		}
+		return;
+	}
+
+	if (storm.exist && sys_clock >= storm.exist_time) { // 생성 후, 소멸 시간이 됨.
+		storm.exist = 0;
+		storm.exist_time += 30000; // 30초 뒤 재생성
+		storm.next_move_time += 30000;
+		display_system_message("모래폭풍이 소멸했습니다.");
+
+		for (int r = 0; r < 2; r++) { // 맵 출력을 위해 map_change = 1 
+			for (int c = 0; c < 2; c++) {
+				POSITION pos = padd(storm.pos, (POSITION) { r, c });
+				map_change[pos.x][pos.y] = 1;
+			}
+		}
+		return;
+	}
+
+	// 모래폭풍 이동
+	if (sys_clock < storm.next_move_time) return;
+	storm.next_move_time += 100;
+
+	DIRECTION dir;
+	POSITION n_pos;
+	do {
+		dir = rand() % 4 + 1;
+		n_pos = pmove(storm.pos, dir);
+	} while (n_pos.x < 0 || n_pos.x >= MAP_HEIGHT - 1 || n_pos.y < 0 || n_pos.y >= MAP_WIDTH - 1);
+
+
+	for (int r = 0; r < 2; r++) {
+		for (int c = 0; c < 2; c++) {
+			POSITION pos = padd(storm.pos, (POSITION) { r, c });
+			map_change[pos.x][pos.y] = 1;
+		}
+	}
+
+	storm.pos = n_pos;
+
+	for (int r = 0; r < 2; r++) {
+		for (int c = 0; c < 2; c++) {
+			POSITION pos = padd(storm.pos, (POSITION) { r, c });
+			map_change[pos.x][pos.y] = 1;
+		}
+	}
+}
+void storm_action() {
+	if (!storm.exist) return; 
+
+	for (int r = 0; r < 2; r++) {
+		for (int c = 0; c < 2; c++) {
+			POSITION pos = padd(storm.pos, (POSITION) { r, c });
+			int idx = get_unit_idx(pos);  
+			if (idx) { 
+				char buff[100];
+				snprintf(buff, 100, "%s이(가) 모래폭풍에 휩쓸렸습니다.", units[idx].info_p->name); 
+				display_system_message(buff);   
+				unit_erase(pos);
+			}
+		}
+	}
+
+	for (int r = 0; r < 2; r++) { 
+		for (int c = 0; c < 2; c++) { 
+			POSITION pos = padd(storm.pos, (POSITION) { r, c }); 
+			int idx = get_building_idx(pos);
+			if (idx && buildings[idx].info_p->repr != 'P' && buildings[idx].info_p->repr != 'S' && !buildings[idx].destroied) {
+				char buff[100];
+				snprintf(buff, 100, "%s이(가) 반파되었습니다.", buildings[idx].info_p->name);  
+				display_system_message(buff);  
+				buildings[idx].destroied = 1;
+				buildings[idx].hp /= 2;
+			}
+		}
+	}
+}
 // 유닛 이동
 inline void units_move() {
+	storm_action();
 	for (int i = 0; i < 2; i++) {
 		sandworm_emission(&sandworm[i]);
 		sandworm_move(&sandworm[i]);
 	}
 	eagle_move(&eagle);
 	storm_move();
+	// storm_move_test();
 }
