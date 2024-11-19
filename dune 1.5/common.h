@@ -12,12 +12,12 @@
 #define TICK 10		// time unit(ms)
 
 
-#define MAP_WIDTH	60
+#define MAP_WIDTH	58
 #define MAP_HEIGHT  16
 
 // 한칸을 띄우고 출력하기 때문에 한줄에 출력할 수 있는 크기는 너비 - 1
 #define SYS_WIDTH	MAP_WIDTH  
-#define SYS_HEIGHT	MAP_HEIGHT / 2 
+#define SYS_HEIGHT	MAP_HEIGHT / 2 + 1
 
 #define STA_WIDTH	MAP_WIDTH * 6/7 
 #define STA_HEIGHT	MAP_HEIGHT 
@@ -52,7 +52,14 @@ typedef enum {
 	k_test,
 	k_1,
 	k_w,
-	k_h
+	k_h,
+	k_b,
+	k_p,
+	k_d,
+	k_g,
+	k_s,
+	k_a,
+	k_f,
 } KEY;
 
 

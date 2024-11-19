@@ -28,6 +28,7 @@ extern RESOURCE resource;
 extern STORM storm;
 extern EAGLE eagle;
 extern int sys_clock;
+extern bool build_mode;
 
 
 // 연결리스트에서 해당하는 객체의 인덱스값을 반환하는 함수
@@ -141,7 +142,10 @@ void display_frame() {
 	display_map_frame();
 }
 void display_resource() {
-	set_color(COLOR_RESOURCE);
+	set_color(COLOR_DEFAULT); 
+	gotoxy(resource_pos);
+	for (int i = 0; i < 33; i++) printf(" ");
+	set_color(COLOR_RESOURCE); 
 	gotoxy(resource_pos);
 	printf("spice = %d/%d, population=%d/%d\n",
 		resource.spice, resource.spice_max,
@@ -153,50 +157,50 @@ void display_time() {
 	gotoxy(time_pos);
 	printf("time: %d: %d: %d", sys_clock / 60000, (sys_clock / 1000) % 60, (sys_clock / 10) % 60);
 }
-void display() {
-	display_resource();
-	display_time();
-	display_frame();
 
-	// 초기 맵 출력
-
-	// nature
-	for (int r = 0; r < MAP_HEIGHT; r++) {
-		for (int c = 0; c < MAP_WIDTH; c++) {
-			printc(padd(map_pos, (POSITION) { r, c }), map[r][c]->repr, map[r][c]->color);
-		}
+// 커서 출력
+void display_cursor() {
+	int rx = 1, cx = 1;
+	if (build_mode) {
+		rx = 2;
+		cx = 2;
 	}
+	for (int r = 0; r < rx; r++) {
+		for (int c = 0; c < cx; c++) {
+			POSITION pos = padd(cursor, (POSITION) { r, c });
+			if (pos.x < 0 || pos.x >= MAP_HEIGHT || pos.y < 0 || pos.y >= MAP_WIDTH) continue;
 
-	// building
-	int idx = 0;
-	while (buildings[buildings[idx].next].exist) {
-		idx = buildings[idx].next;
-		char repr = (buildings[idx].info_p->repr == 'S') ? '0' + buildings[idx].hp : buildings[idx].info_p->repr;
-		for (int r = 0; r < buildings[idx].info_p->size; r++) {
-			for (int c = 0; c < buildings[idx].info_p->size; c++) {
-				POSITION pos = padd(buildings[idx].pos, (POSITION) { r, c });
-				printc(padd(map_pos, pos), repr, buildings[idx].info_p->color);
+			if (storm.exist) {
+				int idx = get_storm_idx(pos);
+				if (idx != -1) {
+					printc(padd(map_pos, pos), storm.repr[idx], COLOR_CURSOR);
+					continue;
+				}
 			}
+			if (eagle.pos.x == pos.x && eagle.pos.y == pos.y) {
+				printc(padd(map_pos, pos), eagle.repr, COLOR_CURSOR);
+				continue;
+			}
+			int idx = get_unit_idx(pos);
+			if (idx) { // 유닛이 존재할경우
+				printc(padd(map_pos, pos), units[idx].info_p->repr, COLOR_CURSOR);
+				continue;
+			}
+			idx = get_sandworm_idx(pos);
+			if (idx != 3) {
+				printc(padd(map_pos, pos), sandworm[idx].info_p->repr, COLOR_CURSOR);
+				continue;
+			}
+			idx = get_building_idx(pos);
+			if (idx) { // 건물이 존재할경우
+				char repr = (buildings[idx].info_p->repr == 's') ? '0' + buildings[idx].hp : buildings[idx].info_p->repr;
+				printc(padd(map_pos, pos), repr, COLOR_CURSOR);
+				continue;
+			}
+			printc(padd(map_pos, pos), map[pos.x][pos.y]->repr, COLOR_CURSOR);
 		}
 	}
-
-	// units
-	idx = 0;
-	while (units[units[idx].next].exist) {
-		idx = units[idx].next;
-		printc(padd(map_pos, (POSITION) { units[idx].pos.x, units[idx].pos.y }), units[idx].info_p->repr, units[idx].info_p->color);
-	}
-
-	// sandworm
-	for (int i = 0; i < 2; i++) {
-		int color = (i == 0) ? COLOR_CURSOR : sandworm[i].info_p->color;
-		printc(padd(map_pos, (POSITION) { sandworm[i].pos.x, sandworm[i].pos.y }), sandworm[i].info_p->repr, color);
-	}
-	printc(padd(map_pos, (POSITION) { eagle.pos.x, eagle.pos.y }), eagle.repr, eagle.color);
-
 }
-
-
 // 맵출력 함수
 void display_map() {
 	for (int r = 0; r < MAP_HEIGHT; r++) {
@@ -205,47 +209,43 @@ void display_map() {
 				if (storm.exist) {
 					int idx = get_storm_idx((POSITION) { r, c });
 					if (idx != -1) {
-						unsigned char color = (cursor.x == r && cursor.y == c) ? COLOR_CURSOR : storm.color;
-						printc(padd(map_pos, (POSITION) { r, c }), storm.repr[idx], color);
+						printc(padd(map_pos, (POSITION) { r, c }), storm.repr[idx], storm.color);
 						map_change[r][c] = 0;
-						continue;
+						continue; 
 					}
 				}
 				if (eagle.pos.x == r && eagle.pos.y == c) {
-					unsigned char color = (cursor.x == r && cursor.y == c) ? COLOR_CURSOR : eagle.color;
-					printc(padd(map_pos, (POSITION) { r, c }), eagle.repr, color);
+					printc(padd(map_pos, (POSITION) { r, c }), eagle.repr, eagle.color);
 					map_change[r][c] = 0;
 					continue;
 				}
 				int idx = get_unit_idx((POSITION) { r, c });
 				if (idx) { // 유닛이 존재할경우
-					unsigned char color = (cursor.x == r && cursor.y == c) ? COLOR_CURSOR : units[idx].info_p->color;
-					printc(padd(map_pos, (POSITION) { r, c }), units[idx].info_p->repr, color);
+					printc(padd(map_pos, (POSITION) { r, c }), units[idx].info_p->repr, units[idx].info_p->color);
 					map_change[r][c] = 0;
 					continue;
 				}
 				idx = get_sandworm_idx((POSITION) { r, c });
 				if (idx != 3) {
-					unsigned char color = (cursor.x == r && cursor.y == c) ? COLOR_CURSOR : sandworm[idx].info_p->color;
-					printc(padd(map_pos, (POSITION) { r, c }), sandworm[idx].info_p->repr, color);
+					printc(padd(map_pos, (POSITION) { r, c }), sandworm[idx].info_p->repr, sandworm[idx].info_p->color);
 					map_change[r][c] = 0;
 					continue;
 				}
 				idx = get_building_idx((POSITION) { r, c });
 				if (idx) { // 건물이 존재할경우
-					unsigned char color = (cursor.x == r && cursor.y == c) ? COLOR_CURSOR : buildings[idx].info_p->color;
-					char repr = (buildings[idx].info_p->repr == 'S') ? '0' + buildings[idx].hp : buildings[idx].info_p->repr;
-					printc(padd(map_pos, (POSITION) { r, c }), repr, color);
+					char repr = (buildings[idx].info_p->repr == 's') ? '0' + buildings[idx].hp : buildings[idx].info_p->repr;
+					printc(padd(map_pos, (POSITION) { r, c }), repr, buildings[idx].info_p->color);
 					map_change[r][c] = 0;
 					continue;
 				}
-				unsigned char color = (cursor.x == r && cursor.y == c) ? COLOR_CURSOR : map[r][c]->color;
-				printc(padd(map_pos, (POSITION) { r, c }), map[r][c]->repr, color);
+				printc(padd(map_pos, (POSITION) { r, c }), map[r][c]->repr, map[r][c]->color);
 				map_change[r][c] = 0;
 			}
 		}
 	}
+	display_cursor();
 }
+
 
 
 // 문자열 출력함수
@@ -335,7 +335,7 @@ void display_state_message(POSITION selection_pos) {
 	pos.x += 1;
 	// 스파이스의 경우, 매장량을 출력
 	int idx = get_building_idx(selection_pos);
-	if (idx && buildings[idx].info_p->repr == 'S') {
+	if (idx && buildings[idx].info_p->repr == 's') {
 		gotoxy(padd(state_pos, pos));
 		printf("매장량 : %d", buildings[idx].hp);
 		return;
@@ -403,7 +403,6 @@ void display_cmd_message(POSITION selection_pos) {
 			pos.x += 2;
 		}
 	}
-
 }
 
 void re_display() {
@@ -421,8 +420,8 @@ void re_display() {
 }
 
 // 선택 취소
-void esc(SELECTION* selection) {
-	selection->pos = (POSITION){ 0, 0 };
+void esc(SELECTION* selection, bool* build_ready) {
+	selection->pos = (POSITION){ -1, -1 };
 	selection->repr = ' ';
 
 	for (int r = 0; r < STA_HEIGHT - 2; r++) {
@@ -431,4 +430,92 @@ void esc(SELECTION* selection) {
 	for (int r = 0; r < CMD_HEIGHT - 2; r++) {
 		erase_message(padd(cmd_pos, (POSITION) { 2 + r, 0 }), STA_WIDTH - 1);
 	}
+	POSITION pos = { 2, 0 };
+	print_message(padd(cmd_pos, pos), "B : Build");
+
+	// 건설모드 해제, 커서 1x1로 변경
+	if (build_mode) {
+		build_mode = 0;
+		for (int r = 0; r < 2; r++) {
+			for (int c = 0; c < 2; c++) {
+				if (cursor.x < 0 || cursor.x >= MAP_HEIGHT - 1 || cursor.y < 0 || cursor.y >= MAP_WIDTH - 1) continue;
+				map_change[cursor.x + r][cursor.y + c] = 1;
+			}
+		}
+	}
+	*build_ready = 0;
+}
+
+// 초기 출력
+void display() {
+	display_resource();
+	display_time();
+	display_frame();
+
+	// 초기 맵 출력
+
+	// nature
+	for (int r = 0; r < MAP_HEIGHT; r++) {
+		for (int c = 0; c < MAP_WIDTH; c++) {
+			printc(padd(map_pos, (POSITION) { r, c }), map[r][c]->repr, map[r][c]->color);
+		}
+	}
+
+	// building
+	int idx = 0;
+	while (buildings[buildings[idx].next].exist) {
+		idx = buildings[idx].next;
+		char repr = (buildings[idx].info_p->repr == 's') ? '0' + buildings[idx].hp : buildings[idx].info_p->repr;
+		for (int r = 0; r < buildings[idx].info_p->size; r++) {
+			for (int c = 0; c < buildings[idx].info_p->size; c++) {
+				POSITION pos = padd(buildings[idx].pos, (POSITION) { r, c });
+				printc(padd(map_pos, pos), repr, buildings[idx].info_p->color);
+			}
+		}
+	}
+
+	// units
+	idx = 0;
+	while (units[units[idx].next].exist) {
+		idx = units[idx].next;
+		printc(padd(map_pos, (POSITION) { units[idx].pos.x, units[idx].pos.y }), units[idx].info_p->repr, units[idx].info_p->color);
+	}
+
+	// sandworm
+	for (int i = 0; i < 2; i++) {
+		int color = (i == 0) ? COLOR_CURSOR : sandworm[i].info_p->color;
+		printc(padd(map_pos, (POSITION) { sandworm[i].pos.x, sandworm[i].pos.y }), sandworm[i].info_p->repr, color);
+	}
+	printc(padd(map_pos, (POSITION) { eagle.pos.x, eagle.pos.y }), eagle.repr, eagle.color);
+
+
+	POSITION pos = { 2, 0 };
+	print_message(padd(cmd_pos, pos), "B : Build");
+}
+// build
+void display_build_list(SELECTION selection, bool *build_ready) {  
+	if (selection.pos.x != -1 || selection.pos.y != -1) return; // 선택 안함 상태가 아님
+	*build_ready = 1;
+
+	for (int r = 0; r < CMD_HEIGHT - 2; r++) { 
+		erase_message(padd(cmd_pos, (POSITION) { 2 + r, 0 }), STA_WIDTH - 1); 
+	} 
+
+	POSITION pos = { 2, 0 };
+	print_message(padd(cmd_pos, pos), "P: plate");
+	pos.y = CMD_WIDTH / 2;
+	print_message(padd(cmd_pos, pos), "D: Dormitory");
+	pos.x += 2;
+	pos.y = 0; 
+	print_message(padd(cmd_pos, pos), "G: Garage");  
+	pos.y = CMD_WIDTH / 2; 
+	print_message(padd(cmd_pos, pos), "B: Barracks"); 
+	pos.x += 2; 
+	pos.y = 0; 
+	print_message(padd(cmd_pos, pos), "S: Shelter"); 
+	pos.y = CMD_WIDTH / 2; 
+	print_message(padd(cmd_pos, pos), "A: Arena");  
+	pos.x += 2; 
+	pos.y = 0;  
+	print_message(padd(cmd_pos, pos), "F: Factory"); 
 }

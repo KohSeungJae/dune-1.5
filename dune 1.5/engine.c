@@ -9,24 +9,26 @@
 int sys_clock = 0;
 POSITION cursor = { 0, 0 };
 RESOURCE resource = {
-	.spice = 100,
+	.spice = 5,
 	.spice_max = 100,
 	.population = 5,
 	.population_max = 100
 };
-SELECTION selection = { 0 };
+SELECTION selection = { .pos = {-1, -1} };
 
 
 /* ================= game data =================== */
-NATURE_INFO* map[MAP_HEIGHT][MAP_WIDTH];
+// 공유하지 않는 정보들 ex) 현재위치, 현재 체력, 다음 움직일 시간...
 SANDWORM sandworm[2];
 UNIT units[100] = { 0 }; // 유닛 연결 리스트
 BUILDING buildings[100] = { 0 }; // 빌딩 연결 리스트
 int unit_unused = 1;
 int building_unused = 1;
+
 bool map_change[MAP_HEIGHT][MAP_WIDTH] = { 0 };
+NATURE_INFO* map[MAP_HEIGHT][MAP_WIDTH]; 
 
-
+// 공유하는 정보들 ex) 최대체력, 속도....
 UNIT_INFO
 error_n = {
 	.repr = 'u',
@@ -192,11 +194,12 @@ b_plate_info = {
 	.size = 2,
 	.max_hp = -1,
 	.state_message = {
-		.size = 2,
+		.size = 3,
 		.about_size = 2,
 		.message = {
 			"[장판] (아트레이디스)",
-			"위에 건물을 건설 할 수 있다."
+			"위에 건물을 건설 할 수 있다.",
+			"건설 비용 : 0"
 		}
 	}
 },
@@ -217,7 +220,7 @@ r_plate_info = {
 	}
 },
 spice_info = {
-	.repr = 'S',
+	.repr = 's',
 	.name = "스파이스",
 	.color = 207,
 	.cost = 0,
@@ -230,6 +233,86 @@ spice_info = {
 			"[스파이스]",
 			"온통 모래뿐인 사막에서의 귀중한 자원이다.",
 			"하베스터를 통해 얻을 수 있다.",
+		}
+	}
+},
+b_dormitory_info = {
+	.repr = 'D',
+	.name = "숙소",
+	.color = COLOR_BLUE,
+	.cost = 2,
+	.size = 2,
+	.max_hp = 10,
+	.state_message = {
+		.size = 3,
+		.about_size = 2,
+		.message = {
+			"[숙소]",
+			"인구 최대치를 늘려준다.",
+			"건설 비용 : 2",
+		}
+	}
+},
+b_garage_info = {
+	.repr = 'G',
+	.name = "창고",
+	.color = COLOR_BLUE,
+	.cost = 4,
+	.size = 2,
+	.max_hp = 10,
+	.state_message = {
+		.size = 3,
+		.about_size = 2,
+		.message = {
+			"[창고]",
+			"스파이스 최대 보유량을 늘려준다.",
+			"건설 비용 : 4",
+		}
+	}
+},
+b_barracks_info = {
+	.repr = 'B',
+	.name = "병영",
+	.color = 20, // 파랑, 빨강
+	.cost = 4,
+	.size = 2,
+	.max_hp = 20,
+	.state_message = {
+		.size = 3,
+		.about_size = 2,
+		.message = {
+			"[병영]",
+			"보병을 훈련할 수 있는 건물이다.",
+			"건설 비용 : 4",
+		}
+	},
+	.cmd_message = {
+		.size = 1,
+		.message = {
+			"S : 보병 생산"
+		}
+	}
+},
+b_shelter_info = {
+	.repr = 'S',
+	.name = "은신처",
+	.color = COLOR_BLUE, 
+	.cost = 5,
+	.size = 2,
+	.max_hp = 30,
+	.state_message = {
+		.size = 3,
+		.about_size = 2,
+		.message = {
+			"[병영]",
+			"특수 유닛을 훈련할 수 있는 건물이다.",
+			"건설 비용 : 5",
+		}
+	},
+	.cmd_message = {
+		.size = 1,
+		.message = {
+			"F : 프레멘 생산"
 		}
 	}
 };
@@ -305,7 +388,16 @@ KEY prev_key;
 bool sand_worm_on = 0;
 bool unit_exist = 1;
 bool storm_on = 1;
+bool build_ready = 0;
+bool build_mode = 0;
+BUILDING_INFO* build_info; 
 
+// test
+bool storm_test_on = 0;
+void test_storm();
+// 인트로 & 종료
+void intro();
+void outro();
 // 유닛 & 빌딩을 연결리스트에 추가
 void unit_push(UNIT_INFO* info, POSITION pos);
 void unit_erase(POSITION pos);
@@ -320,7 +412,7 @@ void init();
 void cursor_move(DIRECTION dir, int n);
 // 선택
 char get_repr(POSITION pos);
-void select1();
+void select1(); 
 // 유닛공격
 void attack_unit(UNIT_INFO* attacker, UNIT* victim);
 // 샌드웜 관련
@@ -339,13 +431,10 @@ void storm_move_test();
 void storm_action(); 
 // 객체 이동
 inline void units_move();
-// 인트로 & 종료
-void intro();
-void outro();
-// test
-void test_message() {
-	display_system_message("test message");
-}
+// build
+void build_mode_exchange(KEY key, BUILDING_INFO* info);
+void build();
+
 
 int main(void) {
 	srand((unsigned int)time(NULL));
@@ -354,7 +443,7 @@ int main(void) {
 	display();
 
 	while (1) {
-		KEY key = get_key();
+		KEY key = get_key(); 
 
 		if (vist_timer != -1 && vist_timer > 80) { // 80ms 이내에 다시 클릭이 이뤄지지 않았을때 
 			cursor_move(ktod(prev_key), 1);
@@ -375,12 +464,23 @@ int main(void) {
 		else {
 			// 방향키 외의 입력
 			switch (key) {
-			case k_space: select1(); break;
+			case k_space: 
+				select1(); 
+				build(); 
+				break; 
 			case k_h: make_unit(&b_havester_info); break;
 			case k_re_dis: re_display(); break;
-			case k_esc: esc(&selection); break;
+			case k_esc: esc(&selection, &build_ready); break; 
 			case k_quit: outro(); break;
-			case k_test: test_message(); break;
+			case k_test: test_storm(); break; 
+			case k_b: 
+				build_mode_exchange(key, &b_barracks_info);
+				display_build_list(selection, &build_ready); 
+				break;
+			case k_p: build_mode_exchange(key, &b_plate_info); break;
+			case k_d: build_mode_exchange(key, &b_dormitory_info); break;
+			case k_g: build_mode_exchange(key, &b_garage_info); break;
+			case k_s: build_mode_exchange(key, &b_shelter_info); break;
 			case k_none:
 			case k_undef:
 			default: break;
@@ -390,14 +490,26 @@ int main(void) {
 		units_move();
 		display_time();
 		display_map();
+		display_resource(); 
 
 		Sleep(TICK);
 		sys_clock += 10;
 		if (vist_timer != -1) vist_timer += 10;
 	}
-
-
 	return 0;
+}
+
+//test
+void test_storm() {
+	if (storm_test_on) {
+		display_system_message("모래폭풍 파괴 테스트 off");
+		storm_test_on = 0;
+	}
+	else {
+		display_system_message("모래폭풍 파괴 테스트 on");
+		storm_test_on = 1;
+	}
+
 }
 
 // 인트로 & 종료
@@ -456,6 +568,7 @@ void unit_erase(POSITION pos) { // 해당 위치의 유닛 삭제
 		idx = units[idx].next;
 	}
 	if (idx == 0 || !units[idx].exist) return;
+	if (units[idx].info_p->color == COLOR_BLUE) resource.population -= units[idx].info_p->population;
 
 	int pre = units[idx].pre;
 	int next = units[idx].next;
@@ -465,6 +578,7 @@ void unit_erase(POSITION pos) { // 해당 위치의 유닛 삭제
 	units[next].pre = pre;
 
 	map_change[pos.x][pos.y] = 1;
+
 }
 
 void building_push(BUILDING_INFO* info, POSITION pos) {
@@ -570,15 +684,24 @@ void cursor_move(DIRECTION dir, int n) { // 방향, 움직일 칸수
 		return;
 	}
 
-	POSITION curr = cursor;
-	POSITION new_pos = pmove(curr, dir);
+
+	POSITION new_pos = pmove(cursor, dir);
 	// validation check
-	if (0 <= new_pos.x && new_pos.x < MAP_HEIGHT && \
-		0 <= new_pos.y && new_pos.y < MAP_WIDTH) {
+	if (build_mode) { 
+		if (new_pos.x < 0 || new_pos.x >= MAP_HEIGHT - 1 || new_pos.y < 0 || new_pos.y >= MAP_WIDTH - 1) return; 
+			for (int r = 0; r < 2; r++) {
+				for (int c = 0; c < 2; c++) {
+					map_change[cursor.x + r][cursor.y + c] = 1;
+				}
+			}
+			cursor = new_pos;
+			cursor_move(dir, n - 1);
+	}
+	else {
+		if (new_pos.x < 0 || new_pos.x >= MAP_HEIGHT || new_pos.y < 0 || new_pos.y >= MAP_WIDTH) return;
 
 		map_change[cursor.x][cursor.y] = 1;
 		cursor = new_pos;
-		map_change[cursor.x][cursor.y] = 1;
 
 		cursor_move(dir, n - 1);
 	}
@@ -600,7 +723,8 @@ char get_repr(POSITION pos) { // 해당 위치에 있는 객체의 문자를 가
 	}
 	return map[pos.x][pos.y]->repr;
 }
-void select1() { // 스페이스바 입력시, 해당 위치와 해당 객체의 문자를 저장, 상태창, 명령창 출력.
+void select1() { // 스페이스바 입력시, 해당 위치와 해당 객체의 문자를 저장, 상태창, 명령창 출력. 
+	if (build_mode) return;
 	selection.pos = cursor;
 	selection.repr = get_repr(cursor);
 	display_state_message(selection.pos);
@@ -804,11 +928,11 @@ void make_unit(UNIT_INFO* unit_info) { // 유닛을 올바른 위치에 추가�
 		display_system_message("유닛을 생산할 공간이 부족합니다.");
 		return;
 	}
-	if (resource.spice - unit_info->cost <= 0) {
+	if (resource.spice - unit_info->cost < 0) {
 		display_system_message("스파이스가 부족합니다.");
 		return;
 	}
-	if (resource.population + unit_info->population >= resource.population_max) {
+	if (resource.population + unit_info->population > resource.population_max) {
 		display_system_message("인구수가 부족합니다.");
 		return;
 	}
@@ -1004,7 +1128,7 @@ void storm_action() {
 		for (int c = 0; c < 2; c++) { 
 			POSITION pos = padd(storm.pos, (POSITION) { r, c }); 
 			int idx = get_building_idx(pos);
-			if (idx && buildings[idx].info_p->repr != 'P' && buildings[idx].info_p->repr != 'S' && !buildings[idx].destroied) {
+			if (idx && buildings[idx].info_p->repr != 'P' && buildings[idx].info_p->repr != 's' && !buildings[idx].destroied) {
 				char buff[100];
 				snprintf(buff, 100, "%s이(가) 반파되었습니다.", buildings[idx].info_p->name);  
 				display_system_message(buff);  
@@ -1022,6 +1146,107 @@ inline void units_move() {
 		sandworm_move(&sandworm[i]);
 	}
 	eagle_move(&eagle);
-	storm_move();
-	// storm_move_test();
+	if (storm_test_on) {
+		storm_move_test();
+	}
+	else {
+		storm_move();
+	}
+}
+
+// build
+void build_mode_exchange(KEY key, BUILDING_INFO* info) {
+	if (!build_ready) return; // B 입력 X
+	build_info = info;
+	build_mode = 1;
+
+	// 커서 위치 조정
+	if (cursor.x == MAP_HEIGHT - 1) {
+		cursor.x -= 1;
+	}
+	if (cursor.y == MAP_WIDTH - 1) {
+		cursor.y -= 1;
+	}
+
+	char buff[100];
+	snprintf(buff, 100, "[%s] 건설 준비중.", info->name);
+	display_system_message(buff);
+
+
+	POSITION state_pos = { 2,  MAP_WIDTH + 5 }; 
+	for (int r = 0; r < STA_HEIGHT - 2; r++) { 
+		erase_message(padd(state_pos, (POSITION) { 2 + r, 0 }), STA_WIDTH - 1); 
+	}
+
+	print_message(padd(state_pos, (POSITION){2, 0}), "[건설모드]");
+
+	POSITION pos = { 4, 0 };   
+	for (int r = 0; r < info->state_message.about_size; r++) { 
+		print_message(padd(state_pos, pos), info->state_message.message[r]); 
+		pos.x += 2; 
+	}
+	for (int r = info->state_message.about_size; r <info->state_message.size; r++) {
+		print_message(padd(state_pos, pos), info->state_message.message[r]); 
+		pos.x += 1; 
+	}
+}
+void build() {
+	if (!build_mode) return;
+
+	if (resource.spice < build_info->cost) {
+		display_system_message("스파이스가 부족합니다.");
+		return;
+	}
+
+	for (int r = 0; r < 2; r++) {
+		for (int c = 0; c < 2; c++) {
+			POSITION pos = padd(cursor, (POSITION) { r, c });
+			if (get_unit_idx(pos) || get_sandworm_idx(pos) != 3) {
+				display_system_message("범위내에 유닛이 있습니다.");
+				return;
+			}
+			int idx = get_building_idx(pos); 
+			if (build_info->repr != 'P' && buildings[idx].info_p->repr != 'P') {
+				display_system_message("장판이 필요합니다.");
+				return;
+			}
+			if (build_info->repr == 'P' && idx != 0) {
+				display_system_message("범위내에 구조물이 있습니다.");
+				return;
+			}
+			if (map[pos.x][pos.y]->repr == 'R') {
+				display_system_message("범위내에 구조물이 있습니다.");
+				return;
+			}
+		}
+	}
+
+	if (build_info->repr != 'P') { // 장판이 아닌경우, 장판을 지우고 깔기
+		building_erase(cursor);
+	}
+
+	resource.spice -= build_info->cost;
+	building_push(build_info, cursor);
+	char buff[100];
+	snprintf(buff, 100, "[%s] 건설완료.", build_info->name);
+	display_system_message(buff);
+	for (int r = 0; r < 2; r++) {
+		for (int c = 0; c < 2; c++) {
+			map_change[cursor.x + r][cursor.y + c] = 1;
+		}
+	}
+
+	// 숙소 인구수 += 10
+	if (build_info->repr == 'D') {
+		resource.population_max += 10;
+	}
+	// 창고 스파이스최대량 += 10
+	if (build_info->repr == 'G') {
+		resource.spice_max += 10;
+	}
+
+
+
+	build_mode = 0;
+	build_ready = 0;
 }

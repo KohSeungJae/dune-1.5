@@ -27,11 +27,15 @@ int get_building_idx(POSITION pos);
 int get_unit_idx(POSITION pos);
 int get_sandworm_idx(POSITION pos);
 
+void print_message(POSITION pos, char str[]);
+void erase_message(POSITION pos, int size);
+
 void display_system_message(char new_str[]);
 void display_state_message(POSITION selection_pos);
 void display_cmd_message(POSITION selection_pos);
 void re_display();
-void esc(SELECTION* selection);
+void esc(SELECTION* selection, bool* build_ready);
+void display_build_list(SELECTION selection, bool* build_ready); 
 
 #endif
 #pragma once

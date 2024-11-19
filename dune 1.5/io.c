@@ -34,6 +34,16 @@ KEY get_key(void) { // 방향키 반환함수
 	case 'w': return k_w;
 	case 'H':
 	case 'h': return k_h;
+	case 'B':
+	case 'b': return k_b;
+	case 'P':
+	case 'p': return k_p; 
+	case 'D':
+	case 'd': return k_d;
+	case 'G':
+	case 'g': return k_g;
+	case 'S':
+	case 's': return k_s;
 	case '1': return k_1;
 	case 27: return k_esc;
 	case 32: return k_space;
