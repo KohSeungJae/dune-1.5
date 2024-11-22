@@ -60,6 +60,7 @@ typedef enum {
 	k_s,
 	k_a,
 	k_f,
+	k_m
 } KEY;
 
 
@@ -140,7 +141,7 @@ struct {
 	int damage;
 	int max_hp;
 	int move_period;
-	int attack_period; // 공격주기
+	int action_period; // 공격주기
 	STATE_MESSAGE state_message;
 	CMD_MESSAGE cmd_message;
 }UNIT_INFO;
@@ -150,9 +151,12 @@ struct {
 	bool exist;
 	POSITION pos;
 	POSITION dest;
+	POSITION point1, point2;
+	char havest_num;
+	char mode[15];
 	int hp;
 	int next_move_time;
-	int next_attack_time;
+	int next_action_time;
 	UNIT_INFO* info_p;
 	unsigned char pre, next;
 }UNIT;
@@ -194,7 +198,7 @@ struct {
 	int len;
 	int hp;
 	int next_move_time;
-	int next_attack_time;
+	int next_action_time;
 	int next_emission_time;
 	UNIT_INFO* info_p;
 }SANDWORM;
