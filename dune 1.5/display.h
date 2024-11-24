@@ -34,7 +34,7 @@ void display_system_message(char new_str[]);
 void display_state_message(); 
 void display_cmd_message();
 void re_display();
-void esc(bool* build_ready, UNIT* selected_unit, BUILDING* selected_building);
+void esc(bool* build_ready);
 void display_build_list(bool* build_ready); 
 
 #endif

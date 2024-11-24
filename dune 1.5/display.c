@@ -31,7 +31,9 @@ extern int sys_clock;
 extern bool build_mode;
 extern UNIT* selected_unit;
 extern BUILDING* selected_building;
-
+extern char plate[MAP_HEIGHT][MAP_WIDTH];
+extern BUILDING_INFO b_plate_info;
+extern BUILDING_INFO r_plate_info;
 
 // 연결리스트에서 해당하는 객체의 인덱스값을 반환하는 함수
 int get_sandworm_idx(POSITION pos) {
@@ -201,6 +203,14 @@ void display_cursor() {
 				printc(padd(map_pos, pos), repr, COLOR_CURSOR);
 				continue;
 			}
+			if (plate[pos.x][pos.y] == 'B') {
+				printc(padd(map_pos, pos), 'P', b_plate_info.color);
+				continue;
+			}
+			if (plate[pos.x][pos.y] == 'R') {
+				printc(padd(map_pos, pos), 'P', r_plate_info.color);
+				continue;
+			}
 			printc(padd(map_pos, pos), map[pos.x][pos.y]->repr, COLOR_CURSOR);
 		}
 	}
@@ -218,6 +228,7 @@ bool check_cursor(POSITION pos) {
 	}
 	return 0;
 }
+
 // 맵출력 함수
 void display_map() {
 	for (int r = 0; r < MAP_HEIGHT; r++) {
@@ -260,13 +271,25 @@ void display_map() {
 					map_change[r][c] = 0;
 					continue;
 				}
+				if (plate[r][c] == 'B') { // 장판이 존재할때
+					int color = (check_cursor((POSITION) { r, c })) ? COLOR_CURSOR : b_plate_info.color; 
+					printc(padd(map_pos, (POSITION) { r, c }), 'P', color); 
+					map_change[r][c] = 0;
+					continue;
+				}
+				if (plate[r][c] == 'R') { // 장판이 존재할때
+					int color = (check_cursor((POSITION) { r, c })) ? COLOR_CURSOR : r_plate_info.color;
+					printc(padd(map_pos, (POSITION) { r, c }), 'P', color); 
+					map_change[r][c] = 0;
+					continue;
+				}
 				int color = (check_cursor((POSITION) { r, c })) ? COLOR_CURSOR : map[r][c]->color;
 				printc(padd(map_pos, (POSITION) { r, c }), map[r][c]->repr, color);
 				map_change[r][c] = 0;
 			}
 		}
 	}
-	//display_cursor();
+	//display_cursor(); 
 }
 
 
@@ -336,6 +359,9 @@ void display_state_message() {
 	else if (selected_building->info_p->repr) {
 		message = &selected_building->info_p->state_message;
 	}
+	else if (plate[cursor.x][cursor.y]) {
+		message = (plate[cursor.x][cursor.y] == 'B') ? &b_plate_info.state_message : &r_plate_info.state_message;
+	}
 	else {
 		message = &map[cursor.x][cursor.y]->state_message;
 	}
@@ -390,17 +416,17 @@ void display_state_message() {
 			strncmp(selected_unit->mode, "wait_h", 15) == 0) {
 			pos.x += 2; 
 			gotoxy(padd(state_pos, pos)); 
-			printf("현재 상태 : 수확(%d스파이스 소유중)", selected_unit->havest_num);
+			printf("현재 상태 : 수확(스파이스 %d개 보유중)", selected_unit->havest_num);
 		}
 		else if (strncmp(selected_unit->mode, "wait", 15) == 0) {
 			pos.x += 2;
 			gotoxy(padd(state_pos, pos));
-			printf("현재 상태 : 대기");
+			printf("현재 상태 : 대기(스파이스 %d개 보유중)", selected_unit->havest_num);
 		}
 		else if (strncpy_s(selected_unit->mode, 15, "move", 15) == 0) { 
 			pos.x += 2;
 			gotoxy(padd(state_pos, pos));
-			printf("현재 상태 : 이동"); 
+			printf("현재 상태 : 이동(스파이스 %d개 보유중)", selected_unit->havest_num);
 		}
 	}
 
@@ -462,7 +488,7 @@ void re_display() {
 }
 
 // 선택 취소
-void esc(bool* build_ready) {
+void esc(bool* build_ready) { 
 	selected_unit = &units[0];
 	selected_building = &buildings[0];
 
@@ -494,44 +520,7 @@ void display() {
 	display_resource(&t);
 	display_time();
 	display_frame();
-
-	// 초기 맵 출력
-
-	// nature
-	for (int r = 0; r < MAP_HEIGHT; r++) {
-		for (int c = 0; c < MAP_WIDTH; c++) {
-			printc(padd(map_pos, (POSITION) { r, c }), map[r][c]->repr, map[r][c]->color);
-		}
-	}
-
-	// building
-	int idx = 0;
-	while (buildings[buildings[idx].next].exist) {
-		idx = buildings[idx].next;
-		char repr = (buildings[idx].info_p->repr == 's') ? '0' + buildings[idx].hp : buildings[idx].info_p->repr;
-		for (int r = 0; r < buildings[idx].info_p->size; r++) {
-			for (int c = 0; c < buildings[idx].info_p->size; c++) {
-				POSITION pos = padd(buildings[idx].pos, (POSITION) { r, c });
-				printc(padd(map_pos, pos), repr, buildings[idx].info_p->color);
-			}
-		}
-	}
-
-	// units
-	idx = 0;
-	while (units[units[idx].next].exist) {
-		idx = units[idx].next;
-		printc(padd(map_pos, (POSITION) { units[idx].pos.x, units[idx].pos.y }), units[idx].info_p->repr, units[idx].info_p->color);
-	}
-
-	// sandworm
-	for (int i = 0; i < 2; i++) {
-		int color = (i == 0) ? COLOR_CURSOR : sandworm[i].info_p->color;
-		printc(padd(map_pos, (POSITION) { sandworm[i].pos.x, sandworm[i].pos.y }), sandworm[i].info_p->repr, color);
-	}
-	printc(padd(map_pos, (POSITION) { eagle.pos.x, eagle.pos.y }), eagle.repr, eagle.color);
-
-
+	display_map(); 
 	POSITION pos = { 2, 0 };
 	print_message(padd(cmd_pos, pos), "B : Build");
 }
