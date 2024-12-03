@@ -4,12 +4,13 @@
 #include "common.h"
 #include "io.h"
 #include "display.h"
+#include "ai.h"
 
 /* ================= control =================== */
 int sys_clock = 0;
 POSITION cursor = { 0, 0 };
 RESOURCE resource = {
-	.spice = 5,
+	.spice = 0,
 	.spice_max = 20,
 	.population = 5,
 	.population_max = 10
@@ -37,7 +38,7 @@ UNIT_INFO
 error_n = {
 	.repr = '\0',
 	.name = "유닛 에러",
-	.color = COLOR_RED,
+	.color = 0,
 	.cost = 5,
 	.population = 5,
 	.max_hp = 70,
@@ -97,6 +98,7 @@ r_havester_info = {
 	.population = 5,
 	.max_hp = 70,
 	.move_period = 2000,
+	.action_period = 2000,
 	.state_message = {
 		.size = 8,
 		.about_size = 2,
@@ -109,6 +111,142 @@ r_havester_info = {
 			"공격력 : 0",
 			"체력 : 70",
 			"시야 : 0",
+		}
+	}
+},
+b_soldier_info = {
+	.repr = 'S',
+	.name = "보병",
+	.mother = 'B',
+	.color = COLOR_BLUE,
+	.cost = 1,
+	.population = 1,
+	.max_hp = 15,
+	.move_period = 1000,
+	.action_period = 800,
+	.damage = 5,
+	.sight = 1,
+	.state_message = {
+		.size = 8,
+		.about_size = 2,
+		.message = {
+			"[보병] (아트레이디스)",
+			"가장 기본적인 전투유닛이다.",
+			"생산 비용 : 1",
+			"인구수 : 1",
+			"이동 주기 : 1초",
+			"공격력 : 5",
+			"체력 : 15",
+			"시야 : 1",
+		}
+	},
+	.cmd_message = {
+		.size = 2,
+		.message = {
+			"M: 이동",
+			"P: 순찰"
+		}
+	}
+},
+b_fremen_info = { 
+	.repr = 'F',
+	.name = "프레멘",
+	.mother = 'S',
+	.color = COLOR_BLUE,
+	.cost = 5,
+	.population = 2,
+	.max_hp = 25,
+	.move_period = 400,
+	.action_period = 200,
+	.damage = 15,
+	.sight = 8,
+	.state_message = {
+		.size = 8,
+		.about_size = 2,
+		.message = {
+			"[프레멘] (아트레이디스)",
+			"고급 전투 자원.",
+			"생산 비용 : 5",
+			"인구수 : 2",
+			"이동 주기 : 0.4초",
+			"공격력 : 15",
+			"체력 : 25",
+			"시야 : 8",
+		}
+	},
+	.cmd_message = {
+		.size = 2,
+		.message = {
+			"M: 이동",
+			"P: 순찰"
+		}
+	} 
+},
+r_fighter_info = {
+	.repr = 'F',
+	.name = "투사",
+	.mother = 'B',
+	.color = COLOR_RED,
+	.cost = 1,
+	.population = 1,
+	.max_hp = 10,
+	.move_period = 1200,
+	.action_period = 600,
+	.damage = 6,
+	.sight = 1,
+	.state_message = {
+		.size = 8,
+		.about_size = 2,
+		.message = {
+			"[투사] (하코넨)",
+			"가장 기본적인 전투유닛이다.",
+			"생산 비용 : 1",
+			"인구수 : 1",
+			"이동 주기 : 1.2초",
+			"공격력 : 6",
+			"체력 : 15",
+			"시야 : 1",
+		}
+	},
+	.cmd_message = {
+		.size = 2,
+		.message = {
+			"M: 이동",
+			"P: 순찰"
+		}
+	}
+},
+r_tank_info = {
+	.repr = 'T',
+	.name = "투사",
+	.mother = 'B',
+	.color = COLOR_RED,
+	.cost = 12,
+	.population = 5,
+	.max_hp = 60,
+	.move_period = 3000,
+	.action_period = 600,
+	.damage = 40,
+	.sight = 4,
+	.state_message = {
+		.size = 8,
+		.about_size = 2,
+		.message = {
+			"[중전차] (하코넨)",
+			"튼튼하고 강력한 전차.",
+			"생산 비용 : 12",
+			"인구수 : 5",
+			"이동 주기 : 3초",
+			"공격력 : 40",
+			"체력 : 60",
+			"시야 : 4",
+		}
+	},
+	.cmd_message = {
+		.size = 2,
+		.message = {
+			"M: 이동",
+			"P: 순찰"
 		}
 	}
 },
@@ -136,7 +274,7 @@ BUILDING_INFO
 error_b = {
 	.repr = '\0',
 	.name = "건물 에러",
-	.color = COLOR_BLUE,
+	.color = 0,
 	.cost = 0,
 	.size = 2,
 	.max_hp = 50,
@@ -406,11 +544,12 @@ bool build_mode = 0;
 
 BUILDING_INFO* build_info;
 bool resource_change;
-
-
+char cmd_mode[20];
+bool f_ready = 0;
 // test
 bool storm_test_on = 0;
 void test_storm();
+void make_fighter();
 // 인트로 & 종료
 void intro();
 void outro();
@@ -460,21 +599,96 @@ void build_mode_exchange(BUILDING_INFO* info);
 void build();
 // 하베스터
 void harvest_mode_exchange();
-void harvest();
+void set_havest_dest();
 void spice_save();
 // 이동
 void move_mode_exchange();
-void move();
+void set_selected_unit_dest();
+// 순찰
+void patrol_move_exchange();
+// 전투
+void combat_mode_exchange(UNIT* unit);
+void unit_search();
 // inline
 inline space_action();
 inline void objects_move();
 void units_action();
+// 테스트를 위한 명령어
+void test_cmd(unsigned char cmd_num) { 
+	if (cmd_num == 0) {
+		strncpy_s(cmd_mode, 20, "on", 20);
+		display_cmd_list(); 
+		return;
+	}
 
-int main(void) {
-	srand((unsigned int)time(NULL));
-	intro();
-	init();
-	display();
+	if (strncmp(cmd_mode, "on", 20) == 0) {
+		if (cmd_num == 1) {
+			sandworm_on_off(); 
+			strncpy_s(cmd_mode, 20, "off", 20); 
+			esc(&build_ready); // 명령모드 종료
+		}
+		else if (cmd_num == 2) {
+			display_r_units_list();  
+			strncpy_s(cmd_mode, 20, "make_r_unit", 20); 
+			// 종료 x
+		}
+		else if (cmd_num == 5) {
+			display_system_message("위치를 선택해 주세요.");
+			strncpy_s(cmd_mode, 20, "make_spice_bd", 20); 
+		}
+		else if (cmd_num == 6) {
+			display_system_message("위치를 선택해 주세요.");
+			strncpy_s(cmd_mode, 20, "make_rock", 20);
+		}
+	}
+	else if (strncmp(cmd_mode, "make_r_unit", 20) == 0) {
+		if (cmd_num == 1) {
+			strncpy_s(cmd_mode, 20, "make_r_h", 20);
+		}
+		else if (cmd_num == 2) {
+			strncpy_s(cmd_mode, 20, "make_r_f", 20);
+		}
+		else if (cmd_num == 3) {
+			strncpy_s(cmd_mode, 20, "make_r_t", 20);
+		}
+		else {
+			display_system_message("잘못된 번호입니다.");
+			return;
+		}
+		display_system_message("위치를 선택해 주세요."); 
+	}
+}
+void make_test_object() {
+	if (strncmp(cmd_mode, "make_r_h", 20) == 0) {
+		unit_push(&r_havester_info, cursor);
+	}
+	else if (strncmp(cmd_mode, "make_r_f", 20) == 0) {
+		unit_push(&r_fighter_info, cursor); 
+	}
+	else if (strncmp(cmd_mode, "make_r_t", 20) == 0) {
+		unit_push(&r_tank_info, cursor);
+	}
+	else if (strncmp(cmd_mode, "make_spice_bd", 20) == 0) {
+		building_push(&spice_info, cursor);
+	}
+	else if (strncmp(cmd_mode, "make_rock", 20) == 0) {
+		map[cursor.x][cursor.y] = &rock_info;
+		map_change[cursor.x][cursor.y] = 1;
+	}
+	else {
+		return;
+	}
+
+	esc(&build_ready); // 명령모드 종료
+}
+
+
+
+int main(void) { 
+	srand((unsigned int)time(NULL));  
+	intro();  
+	init();  
+	display();  
 
 	while (1) {
 		KEY key = get_key();
@@ -511,23 +725,36 @@ int main(void) {
 				build_mode_exchange(&b_barracks_info);
 				display_build_list(&build_ready);
 				break;
-			case k_p: build_mode_exchange(&b_plate_info); break;
+			case k_p: 
+				build_mode_exchange(&b_plate_info); 
+				patrol_move_exchange();
+				break;
 			case k_d: build_mode_exchange(&b_dormitory_info); break;
 			case k_g: build_mode_exchange(&b_garage_info); break;
 			case k_s: 
 				build_mode_exchange(&b_shelter_info); 
+				make_unit(&b_soldier_info);
 				spice_save();
 				break;
 			case k_m: move_mode_exchange(); break;
-			case k_1: sandworm_on_off();
+			case k_f: make_unit(&b_fremen_info); break;
+			case k_1: test_cmd(1); break;
+			case k_2: test_cmd(2); break; 
+			case k_3: test_cmd(3); break;
+			case k_5: test_cmd(5); break;
+			case k_6: test_cmd(6); break;
+			case k_cmd: test_cmd(0); break;
 			case k_none:
 			case k_undef:
 			default: break;
 			}
 		}
+		ai_engine(); // ai 판단
 
-		objects_move();
-		units_action();
+		unit_search(); // 유닛 탐색
+		objects_move(); // 유닛, 샌드웜, 모래폭풍 이동
+		units_action(); // 유닛 행동(전투, 채집)	
+
 		display_time();
 		display_map();
 		display_resource(&resource_change);
@@ -551,7 +778,15 @@ void test_storm() {
 	}
 
 }
-
+void make_fighter() {
+	if (!f_ready) {
+		f_ready = 1;
+		display_system_message("위치 선택");
+		return;
+	}
+	unit_push(&r_fighter_info, cursor);
+	f_ready = 0;
+}
 // 인트로 & 종료
 void intro() {
 	gotoxy((POSITION) { 8, 55 });
@@ -623,7 +858,6 @@ void unit_erase(POSITION pos) { // 해당 위치의 유닛 삭제
 	units[next].pre = pre;
 
 	map_change[pos.x][pos.y] = 1;
-
 }
 
 void building_push(BUILDING_INFO* info, POSITION pos) {
@@ -641,6 +875,12 @@ void building_push(BUILDING_INFO* info, POSITION pos) {
 	buildings[building_unused].next = idx;
 	buildings[idx].pre = building_unused;
 	building_unused = idx;
+
+	for (int r = 0; r < 2; r++) {
+		for (int c = 0; c < 2; c++) {
+			map_change[pos.x + r][pos.y + c] = 1;
+		}
+	}
 }
 void building_erase(POSITION pos) { // 해당 위치의 유닛 삭제 
 	int idx = 0;
@@ -656,6 +896,12 @@ void building_erase(POSITION pos) { // 해당 위치의 유닛 삭제
 	buildings[idx].exist = 0;
 	buildings[pre].next = next;
 	buildings[next].pre = pre;
+
+	for (int r = 0; r < 2; r++) {
+		for (int c = 0; c < 2; c++) {
+			map_change[pos.x + r][pos.y + c] = 1;
+		}
+	}
 }
 
 // init
@@ -700,10 +946,22 @@ void init() {
 	building_push(&spice_info, (POSITION) { 4, MAP_WIDTH - 1 });
 
 	// plate
+	// base
+	plate[MAP_HEIGHT - 2][0] = 'B'; 
+	plate[MAP_HEIGHT - 2][1] = 'B'; 
+	plate[MAP_HEIGHT - 1][0] = 'B'; 
+	plate[MAP_HEIGHT - 1][1] = 'B';
+
 	plate[MAP_HEIGHT - 2][2] = 'B';
 	plate[MAP_HEIGHT - 2][3] = 'B';
 	plate[MAP_HEIGHT - 1][2] = 'B';
 	plate[MAP_HEIGHT - 1][3] = 'B';
+
+	// base
+	plate[0][MAP_WIDTH - 2] = 'R'; 
+	plate[0][MAP_WIDTH - 1] = 'R'; 
+	plate[1][MAP_WIDTH - 2] = 'R'; 
+	plate[1][MAP_WIDTH - 1] = 'R';
 
 	plate[0][MAP_WIDTH - 3] = 'R';
 	plate[0][MAP_WIDTH - 4] = 'R';
@@ -1003,6 +1261,7 @@ POSITION get_position(POSITION building_pos) { // 유닛을 생성할때 생성�
 }
 void make_unit(UNIT_INFO* unit_info) { // 유닛을 올바른 위치에 추가하는 함수x
 	if (selected_building->info_p->repr != unit_info->mother || selected_building->info_p->color == COLOR_RED) return;
+	if (unit_info->repr == 'S' && selected_building->info_p->color != 20) return; // 보병생산은 색깔까지 검사
 
 	POSITION pos = get_position(selected_building->pos);
 	if (pos.x == 0 && pos.y == MAP_HEIGHT - 1) {
@@ -1082,7 +1341,7 @@ void storm_move() {
 
 	if (storm.exist && sys_clock >= storm.exist_time) { // 생성 후, 소멸 시간이 됨.
 		storm.exist = 0;
-		storm.exist_time += 30000; // 30초 뒤 재생성
+		storm.exist_time += 300000; // 300초 뒤 재생성
 		storm.next_move_time += 30000;
 		display_system_message("모래폭풍이 소멸했습니다.");
 
@@ -1280,9 +1539,15 @@ void build() {
 				display_system_message("범위내에 유닛이 있습니다.");
 				return;
 			}
-			if (build_info->repr != 'P' && plate[pos.x][pos.y] != 'B') { 
-				display_system_message("장판이 필요합니다.");
-				return;
+			if (build_info->repr != 'P') { 
+				if (build_info->color == COLOR_BLUE && plate[pos.x][pos.y] != 'B') {
+					display_system_message("장판이 필요합니다.");
+					return;
+				}
+				if (build_info->color == COLOR_RED && plate[pos.x][pos.y] != 'R') {
+					display_system_message("장판이 필요합니다.");
+					return;
+				}
 			}
 			if (get_building_idx(pos)) {
 				display_system_message("범위내에 구조물이 있습니다.");
@@ -1296,24 +1561,22 @@ void build() {
 	}
 
 	if (build_info->repr == 'P') { // 장판의 경우
-		plate[cursor.x][cursor.y] = 'B';
-		plate[cursor.x][cursor.y + 1] = 'B';
-		plate[cursor.x + 1][cursor.y] = 'B';
-		plate[cursor.x + 1][cursor.y + 1] = 'B';
+		char color = (build_info->color == COLOR_BLUE) ? 'B' : 'R';
+		plate[cursor.x][cursor.y] = color;  
+		plate[cursor.x][cursor.y + 1] = color; 
+		plate[cursor.x + 1][cursor.y] = color; 
+		plate[cursor.x + 1][cursor.y + 1] = color;  
 	}
 	else { // 그 외 건물
 		building_push(build_info, cursor); 
 	}
 
-	resource.spice -= build_info->cost;
-	char buff[100];
-	snprintf(buff, 100, "[%s] 건설완료.", build_info->name);
-	display_system_message(buff);
-	for (int r = 0; r < 2; r++) {
-		for (int c = 0; c < 2; c++) {
-			map_change[cursor.x + r][cursor.y + c] = 1;
-		}
-	}
+	resource.spice -= build_info->cost; 
+	if (build_info->color == COLOR_BLUE || build_info->color == 20) {
+		char buff[100]; 
+		snprintf(buff, 100, "[%s] 건설완료.", build_info->name); 
+		display_system_message(buff); 
+	} 
 
 	// 숙소 인구수 += 10
 	if (build_info->repr == 'D') {
@@ -1359,9 +1622,8 @@ int find_min_dist(POSITION pos, POSITION dest) { // 너비우선탐색으로 목
 			}
 
 			// 이동위치에 장애물(유닛, 샌드웜, 건물)이 있음
-			int idx = get_building_idx(npos);
 			if (map[npos.x][npos.y]->repr == 'R' || get_sandworm_idx(npos) != 3 || \
-				(idx && buildings[idx].info_p->repr != 'P') || get_unit_idx(npos)) continue;
+				get_building_idx(npos) || get_unit_idx(npos)) continue;
 
 
 			dist[npos.x][npos.y] = dist[pos.x][pos.y] + 1;
@@ -1397,11 +1659,12 @@ DIRECTION get_min_dir(POSITION pos, POSITION dest) { // 현재 위치에서 상�
 		return dir;
 }
 void move_to_base(UNIT* unit, char mode) {
-
 	if (resource.spice + unit->havest_num > resource.spice_max) {
 		resource.spice = resource.spice_max;
 		resource_change = 1;
 		display_system_message("스파이스가 가득 찼습니다.");
+		strncpy_s(unit->mode, 15, "wait", 15);
+		return;
 	}
 	else {
 		resource.spice += unit->havest_num;
@@ -1412,7 +1675,7 @@ void move_to_base(UNIT* unit, char mode) {
 		strncpy_s(unit->mode, 15, "wait", 15);
 	}
 	else {
-		unit->dest = unit->point2;
+		unit->dest = unit->point2; 
 		strncpy_s(unit->mode, 15, "move_to_s", 15);
 		unit->next_move_time = sys_clock + unit->info_p->move_period; // 이동 활성화   
 	}
@@ -1422,36 +1685,102 @@ void unit_move(UNIT* unit) {
 	if (sys_clock < unit->next_move_time) return;
 	unit->next_move_time += unit->info_p->move_period;
 
+	if (strncmp(unit->mode, "move_to_e", 15) == 0) { // 유닛 전투 목적지 설정 
+		if (!get_unit_idx(*(unit->combat_pos_p))) { // 이동중 상대 유닛이 사망
+			strncpy_s(unit->mode, 15, "wait", 15);
+			unit->next_move_time = INT_MAX; // 이동 비활성화
+			return;
+		}
+		unit->dest = *(unit->combat_pos_p);  
+	}
+
 	// 이동
 	DIRECTION dir = get_min_dir(unit->pos, unit->dest);
 	POSITION next_pos = pmove(unit->pos, dir);
-	map_change[unit->pos.x][unit->pos.y] = 1;
-	unit->pos = next_pos;
-	map_change[unit->pos.x][unit->pos.y] = 1;
+	map_change[unit->pos.x][unit->pos.y] = 1; 
+	unit->pos = next_pos; 
+	map_change[unit->pos.x][unit->pos.y] = 1; 
 
 	// 목적지 도착
 	if (unit->dest.x == unit->pos.x && unit->dest.y == unit->pos.y) {
 		unit->next_move_time = INT_MAX; // 이동 비활성화
 
 		// 목적지에 도착했을때, 유닛 상태를 확인
-		if (strncmp(unit->mode, "move_to_s", 15) == 0) {
-			unit->next_action_time = sys_clock + unit->info_p->action_period; // 행동(수확)활성화 
-			strncpy_s(unit->mode, 15, "wait_h", 15); // '수확 대기' 모드
-			display_system_message("하베스터가 수확중입니다.");
-		}
-		else if (strncmp(unit->mode, "move_to_b", 15) == 0) { // 스파이스 -> 본진
+		if (strncmp(unit->mode, "move_to_b", 15) == 0) { // 스파이스 -> 본진
 			move_to_base(unit, ' ');
-		}
-		else if (strncmp(unit->mode, "move_to_b_w", 10) == 0) { // 스파이스 -> 본진대기
+		} 
+		else if (strncmp(unit->mode, "move_to_b_w", 15) == 0) { // 스파이스 -> 본진대기
 			move_to_base(unit, 'w');
 		}
-		else if (strncmp(unit->mode, "move", 10) == 0) {
+		else if (strncmp(unit->mode, "move", 15) == 0) {
 			char buff[100];
 			snprintf(buff, 100, "[%s]가 목적지에 도착했습니다.", unit->info_p->name);
 			display_system_message(buff);
 			strncpy_s(unit->mode, 15, "wait", 15);
 		}
+		else if (strncmp(unit->mode, "patrol_to_1", 15) == 0) { // 순찰중, 포인트2 -> 포인트 1
+			unit->next_move_time = sys_clock + unit->info_p->move_period; // 이동 활성화   
+			unit->dest = unit->point2;
+			strncpy_s(unit->mode, 15, "patrol_to_2", 15);
+		}
+		else if (strncmp(unit->mode, "patrol_to_2", 15) == 0) { // 순찰중, 포인트1 -> 포인트 2 
+			unit->next_move_time = sys_clock + unit->info_p->move_period; // 이동 활성화   
+			unit->dest = unit->point1; 
+			strncpy_s(unit->mode, 15, "patrol_to_1", 15); 
+		}
 	}
+
+	// 목적지 인접위치 도착 확인(스파이스, 전투대상, 공격건물)
+	if (strncmp(unit->mode, "move_to_e", 15) == 0) { // 인접한 칸에 전투 대상이 있는지 확인
+		for (DIRECTION d = 1; d <= 4; d++) { 
+			POSITION pos = padd(unit->pos, dtop(d)); 
+			if (pos.x == unit->combat_pos_p->x && pos.y == unit->combat_pos_p->y) {
+				int idx = get_unit_idx(pos);
+				// 이동 비활성화
+				unit->next_move_time = INT_MAX; 
+				units[idx].next_move_time = INT_MAX; 
+				// 행동(전투)활성화
+				unit->next_action_time = sys_clock + unit->info_p->action_period;
+				units[idx].next_action_time = sys_clock + units[idx].info_p->action_period;
+				// 모드 변경
+				strncpy_s(unit->mode, 15, "combat", 15);
+				strncpy_s(units[idx].mode, 15, "combat", 15); 
+				// 전투상대 좌표 다시한번 저장(시야가 1인경우 지정되지 않을 수 있음)
+				units[idx].combat_pos_p = &unit->pos;
+				unit->combat_pos_p = &units[idx].pos;
+				// 시스템 메시지
+				char buff[100];
+				snprintf(buff, 100, "[%s] vs [%s] 전투 시작.", unit->info_p->name, units[idx].info_p->name);
+				display_system_message(buff);
+			}
+		}
+	}
+	if (strncmp(unit->mode, "move_to_bd", 15) == 0) { // 인접한 칸에 공격 건물이 있는지 확인
+		int idx = get_building_idx(unit->dest); 
+		for (DIRECTION d = 1; d <= 4; d++) {  
+			POSITION pos = padd(unit->pos, dtop(d));  
+			int n_idx = get_building_idx(pos); 
+			if (n_idx == idx) {
+				strncpy_s(unit->mode, 15, "attack_b", 15); 
+				unit->next_action_time = sys_clock + unit->info_p->action_period; 
+				unit->next_move_time = INT_MAX;
+			}
+		}
+	}
+	if (strncmp(unit->mode, "move_to_s", 15) == 0) {
+		int idx = get_building_idx(unit->dest);  
+		for (DIRECTION d = 1; d <= 4; d++) { 
+			POSITION pos = padd(unit->pos, dtop(d)); 
+			int n_idx = get_building_idx(pos);
+			if (n_idx == idx) {
+				unit->next_action_time = sys_clock + unit->info_p->action_period; // 행동(수확)활성화 
+				unit->next_move_time = INT_MAX;
+				strncpy_s(unit->mode, 15, "wait_h", 15); // '수확 대기' 모드  
+				// display_system_message("하베스터가 수확중입니다."); 
+			}
+		}
+	}
+	
 
 	// 하베스터가 집으로 돌아갈때 목적지를 실시간으로 설정
 	if (strncmp(unit->mode, "move_to_b", 10) == 0 || \
@@ -1468,11 +1797,10 @@ void units_move() {
 	}
 }
 
-// 유닛 행동
-void wait_h(UNIT *unit) { // 
-	if (sys_clock < unit->next_action_time) return; 
+// 유닛 행동 
+void haveste(UNIT *unit) {
 	unit->next_move_time = sys_clock + unit->info_p->move_period / 5; // 이동 활성화 
-	unit->dest = get_position((POSITION) { MAP_HEIGHT - 2, 0 }); 
+	unit->dest = get_position((POSITION) { MAP_HEIGHT - 2, 0 });  // 목적지 설정
 
 	for (DIRECTION dir = 1; dir <= 4; dir++) {
 		POSITION pos = padd(unit->pos, dtop(dir)); 
@@ -1491,9 +1819,9 @@ void wait_h(UNIT *unit) { //
 				strncpy_s(unit->mode, 15, "move_to_b", 15); // 베이스로 이동중이라는 의미  
 			}
 
-			char buff[100]; 
-			snprintf(buff, 100, "하베스터가 스파이스를 채집했습니다. (채집량 %d)", unit->havest_num); 
-			display_system_message(buff); 
+			//char buff[100]; 
+			//snprintf(buff, 100, "하베스터가 스파이스를 채집했습니다. (채집량 %d)", unit->havest_num); 
+			//display_system_message(buff); 
 
 			map_change[pos.x][pos.y] = 1; 
 			return; 
@@ -1502,10 +1830,63 @@ void wait_h(UNIT *unit) { //
 	// 스파이스가 사라졌을때
 	strncpy_s(unit->mode, 15, "move_to_b_w", 15); // 베이스로 이동중이라는 의미 
 }
+void combat(UNIT *unit) { 
+	unit->next_action_time += unit->info_p->action_period;
 
+	int idx = get_unit_idx(*(unit->combat_pos_p)); // 전투 상대 유닛
+	if (units[idx].hp - unit->info_p->damage > 0) {
+		units[idx].hp -= unit->info_p->damage;
+
+		char buff[100];
+		snprintf(buff, 100, "[%s]가 공격당했습니다.(남은체력 : %d)", units[idx].info_p->name, units[idx].hp);
+		display_system_message(buff); 
+	}
+	else {
+		unit_erase(units[idx].pos);
+		strncpy_s(unit->mode, 15, "wait", 15);
+		unit->next_action_time = INT_MAX;
+		char buff[100]; 
+		snprintf(buff, 100, "[%s]가 사망했습니다.", units[idx].info_p->name); 
+		display_system_message(buff); 
+	}
+}
+void attack_building(UNIT *unit) {
+	unit->next_action_time += unit->info_p->action_period;
+
+	int idx = get_building_idx(unit->dest);
+	if (buildings[idx].hp - unit->info_p->damage > 0) {
+		buildings[idx].hp -= unit->info_p->damage; 
+
+		char buff[100];
+		snprintf(buff, 100, "[%s]이(가) 공격당했습니다.(남은체력 : %d)", buildings[idx].info_p->name, buildings[idx].hp);
+		display_system_message(buff);
+	}
+	else {
+		building_erase(buildings[idx].pos);
+		strncpy_s(unit->mode, 15, "wait", 15);
+		unit->next_action_time = INT_MAX; 
+		char buff[100]; 
+		snprintf(buff, 100, "[%s]이(가) 파괴되었습니다.", buildings[idx].info_p->name); 
+		display_system_message(buff); 
+	}
+
+}
 void unit_action(UNIT* unit) {
+	if (sys_clock < unit->next_action_time) return;
+
 	if (strncmp(unit->mode, "wait_h", 15) == 0) {
-		wait_h(unit);
+		if (unit->info_p->color == COLOR_BLUE) {
+			haveste(unit); 
+		}
+		else {
+
+		}
+	}
+	else if (strncmp(unit->mode, "combat", 15) == 0) {
+		combat(unit);
+	}
+	else if (strncmp(unit->mode, "attack_b", 15) == 0) {
+		attack_building(unit);
 	}
 }
 void units_action() {
@@ -1515,40 +1896,42 @@ void units_action() {
 		unit_action(&units[idx]);
 	}
 }
+void patrol_move_exchange() {
+	if (selected_unit->info_p->color == COLOR_RED) return; 
+
+	display_system_message("순찰할 위치를 선택해 주세요.");
+	strncpy_s(selected_unit->mode, 15, "select_pp", 15);
+}
 
 // 하베스터
 void harvest_mode_exchange() {
 	// 선택 유닛이 블루팀 하베스터가 아닐때
 	if (selected_unit->info_p->repr != 'H' || selected_unit->info_p->color == COLOR_RED) return;
 
-	display_system_message("수확할 스파이스와 인접한 칸을 선택해 주세요.");
+	display_system_message("수확할 스파이스를 선택해 주세요.");
 	strncpy_s(selected_unit->mode, 15, "select_s", 15);
 }
-void harvest() {
+void set_havest_dest() {
 	if (strncmp(selected_unit->mode, "select_s", 15) != 0) return;
-
-	for (DIRECTION dir = 1; dir <= 4; dir++) {  // 커서에서 상하좌우에 스파이스가 있는지 탐색
-		POSITION pos = padd(cursor, dtop(dir));
-		int idx = get_building_idx(pos);
-		if (buildings[idx].info_p->repr == 's') {
-			// 왕복할 양 끝 위치를 저장
-			//selected_unit->point1 = get_position((POSITION){ MAP_HEIGHT - 2, 0 }); 
-			selected_unit->point2 = cursor;
-
-			selected_unit->dest = cursor;
-			selected_unit->next_move_time = sys_clock + selected_unit->info_p->move_period;
-
-			strncpy_s(selected_unit->mode, 15, "move_to_s", 15); // 스파이스로 이동중이라는 의미
-			display_system_message("해당 스파이스로 이동합니다.");
-			selected_unit = &units[0];
-			return;
-		}
+	int idx = get_building_idx(cursor);
+	if (buildings[idx].info_p->repr != 's') {
+		display_system_message("스파이스가 아닙니다.");
+		display_system_message("다시 선택해 주세요.");
+		return;
 	}
-	display_system_message("스파이스와 인접한 칸이 아닙니다.");
-	display_system_message("다시 선택해 주세요");
+
+	selected_unit->point2 = cursor; 
+	selected_unit->dest = cursor;
+	selected_unit->next_move_time = sys_clock + selected_unit->info_p->move_period;
+
+	strncpy_s(selected_unit->mode, 15, "move_to_s", 15); // 스파이스로 이동중이라는 의미
+	display_system_message("해당 스파이스로 이동합니다.");
+	selected_unit = &units[0];
+	return;
 }
 // 수동 저장
 void spice_save() { // 하베스터가 스파이스를 들고있는 상태에서, 다른곳으로 이동하다 베이스에 도착했을때 가지고있던 스파이스를 저장할수 있는 기능.
+
 	// 선택 유닛이 블루팀 하베스터가 아닐때
 	if (selected_unit->info_p->repr != 'H' || selected_unit->info_p->color == COLOR_RED) return; 
 
@@ -1558,9 +1941,15 @@ void spice_save() { // 하베스터가 스파이스를 들고있는 상태에서
 		
 		if (buildings[get_building_idx(pos)].info_p->repr == 'B') { 
 			if (selected_unit->havest_num) {
-				resource.spice = (resource.spice + selected_unit->havest_num < resource.spice_max) ? resource.spice + selected_unit->havest_num : resource.spice_max;
+				if (resource.spice + selected_unit->havest_num < resource.spice_max) {
+					resource.spice += selected_unit->havest_num;
+					display_system_message("스파이스를 저장했습니다.");
+				}
+				else {
+					resource.spice = resource.spice_max;
+					selected_unit->havest_num = resource.spice_max - resource.spice + selected_unit->havest_num;
+				}
 				resource_change = 1;
-				display_system_message("스파이스를 저장했습니다.");
 				return;
 			}
 			display_system_message("보유중인 스파이스가 없습니다.");
@@ -1572,36 +1961,102 @@ void spice_save() { // 하베스터가 스파이스를 들고있는 상태에서
 
 // 이동
 void move_mode_exchange() {
-	if (selected_unit->info_p->color == COLOR_RED) return;
+	if (selected_unit->info_p->color != COLOR_BLUE) return;
 
 	display_system_message("이동할 위치를 선택해 주세요.");
 	strncpy_s(selected_unit->mode, 15, "select_p", 15);
 }
-void move() {
-	if (strncmp(selected_unit->mode, "select_p", 15) != 0) return;
-
-
-	if (!get_unit_idx(cursor) && !get_building_idx(cursor) && get_sandworm_idx(cursor) == 3) {
-		display_system_message("이동을 시작합니다.");
-		strncpy_s(selected_unit->mode, 15, "move", 15);
-		selected_unit->dest = cursor;
-		selected_unit->next_move_time = sys_clock + selected_unit->info_p->move_period;
-		return;
+void set_selected_unit_dest() { // 선택된 유닛의 목적지를 설정하는 함수 
+	if (strncmp(selected_unit->mode, "select_p", 15) == 0) { // 이동 목적지
+		int idx = get_building_idx(cursor); 
+		if (buildings[idx].info_p->color == COLOR_RED) { // 건물 선택
+			selected_unit->dest = buildings[idx].pos; 
+			display_system_message("이동을 시작합니다.");
+			strncpy_s(selected_unit->mode, 15, "move_to_bd", 15);
+			selected_unit->next_move_time = sys_clock + selected_unit->info_p->move_period;
+			return;
+		}
+		if (!get_unit_idx(cursor) && get_sandworm_idx(cursor) == 3) {  
+			display_system_message("이동을 시작합니다.");
+			strncpy_s(selected_unit->mode, 15, "move", 15);
+			selected_unit->dest = cursor;
+			selected_unit->next_move_time = sys_clock + selected_unit->info_p->move_period;
+			return;
+		}
+		display_system_message("유닛&건물이 없는 위치를 선택해 주세요"); 
+		display_system_message("다시 선택해 주세요"); 
 	}
-
-	display_system_message("유닛&건물이 없는 위치를 선택해 주세요");
-	display_system_message("다시 선택해 주세요");
+	else if (strncmp(selected_unit->mode, "select_pp", 15) == 0) { // 순찰 목적지
+		if (!get_unit_idx(cursor) && !get_building_idx(cursor) && get_sandworm_idx(cursor) == 3) {
+			display_system_message("순찰을 시작합니다.");
+			strncpy_s(selected_unit->mode, 15, "patrol_to_2", 15); // "포인트 2로 향하는 중"의미
+			selected_unit->point1 = selected_unit->pos; // 포인트 1 : 현재위치
+			selected_unit->point2 = cursor;  // 포인트 2 : 지정위치
+			selected_unit->dest = cursor; 
+			selected_unit->next_move_time = sys_clock + selected_unit->info_p->move_period; 
+			return;
+		}
+		display_system_message("유닛&건물이 없는 위치를 선택해 주세요"); 
+		display_system_message("다시 선택해 주세요"); 
+	}
 }
 
+// 전투
+void combat_mode_exchange(UNIT *unit) {
+	if (strncmp(unit->mode, "move_to_e", 15) == 0 || strncmp(unit->mode, "combat", 15) == 0) return;
+
+	for (int i = 0; i < MAP_HEIGHT; i++) {
+		for (int j = 0; j < MAP_WIDTH; j++) {
+			dist[i][j] = -1;
+		}
+	}
+	 
+	int head = 0, tail = 0;
+	Q[tail++] = unit->pos;
+	dist[unit->pos.x][unit->pos.y] = 0; 
+
+	while (head != tail) {
+		POSITION pos = Q[head++];
+		if (dist[pos.x][pos.y] == unit->info_p->sight) return;
+
+		for (DIRECTION dir = 1; dir <= 4; dir++) {
+			POSITION npos = pmove(pos, dir);
+
+			// 맵을 벗어날 때
+			if (npos.x < 0 || npos.x >= MAP_HEIGHT || npos.y < 0 || npos.y >= MAP_WIDTH || dist[npos.x][npos.y] != -1) continue;
+			int idx = get_unit_idx(npos);
+			if (idx) {
+				if (unit->info_p->color == COLOR_BLUE && units[idx].info_p->color == COLOR_RED\
+					|| unit->info_p->color == COLOR_RED && units[idx].info_p->color == COLOR_BLUE) { // 블루 -> 레드 , 레드 -> 블루
+					strncpy_s(unit->mode, 15, "move_to_e", 15); // 전투를 위해 적에게 이동   
+					unit->combat_pos_p = &units[idx].pos;
+					unit->next_move_time = sys_clock + unit->info_p->move_period; // 이동 활성화
+					return;
+				}
+			}
+
+			dist[npos.x][npos.y] = dist[pos.x][pos.y] + 1;
+			Q[tail++] = npos; 
+		}
+	}
+}
+void unit_search() { // 시야에 상대 유닛이 보이는지 확인
+	int idx = 0; 
+	while (units[units[idx].next].exist) { // 다음 유닛이 없을때 까지 순회  
+		idx = units[idx].next; 
+		combat_mode_exchange(&units[idx]);  
+	}
+}
 
 // inline
 inline space_action() {
-	move();
-	harvest();
+	set_selected_unit_dest();
+	set_havest_dest();
 	build();
 	select_object();
 	display_state_message();
 	display_cmd_message();
+	make_test_object(); 
 }
 inline void objects_move() {
 	storm_action();

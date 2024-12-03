@@ -36,6 +36,9 @@ void display_cmd_message();
 void re_display();
 void esc(bool* build_ready);
 void display_build_list(bool* build_ready); 
+void display_cmd_list(); 
+void erase_cmd(); 
+void display_r_units_list(); 
 
 #endif
 #pragma once

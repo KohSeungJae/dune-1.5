@@ -34,6 +34,7 @@ extern BUILDING* selected_building;
 extern char plate[MAP_HEIGHT][MAP_WIDTH];
 extern BUILDING_INFO b_plate_info;
 extern BUILDING_INFO r_plate_info;
+extern char cmd_mode[20];
 
 // 연결리스트에서 해당하는 객체의 인덱스값을 반환하는 함수
 int get_sandworm_idx(POSITION pos) {
@@ -409,25 +410,32 @@ void display_state_message() {
 		for (int i = 0; i < selected_unit->hp / 10; i++) printf("@");
 		printf(" (%d)", selected_unit->hp);
 
+		pos.x += 2; 
+		gotoxy(padd(state_pos, pos)); 
 
-		if (strncmp(selected_unit->mode, "move_to_s", 15) == 0 ||\
-			strncmp(selected_unit->mode, "move_to_b", 15) == 0 ||\
-			strncmp(selected_unit->mode, "move_to_b_w", 15) == 0 ||\
-			strncmp(selected_unit->mode, "wait_h", 15) == 0) {
-			pos.x += 2; 
-			gotoxy(padd(state_pos, pos)); 
-			printf("현재 상태 : 수확(스파이스 %d개 보유중)", selected_unit->havest_num);
+		if (selected_unit->info_p->repr == 'H') { // 하베스터의 경우
+			if (strncmp(selected_unit->mode, "move_to_s", 15) == 0 || \
+				strncmp(selected_unit->mode, "move_to_b", 15) == 0 || \
+				strncmp(selected_unit->mode, "move_to_b_w", 15) == 0 || \
+				strncmp(selected_unit->mode, "wait_h", 15) == 0) {
+				printf("현재 상태 : 수확(스파이스 %d개 보유중)", selected_unit->havest_num); 
+			}
+			else if (strncmp(selected_unit->mode, "wait", 15) == 0) { 
+				printf("현재 상태 : 대기(스파이스 %d개 보유중)", selected_unit->havest_num); 
+			}
+			else if (strncmp(selected_unit->mode,"move", 15) == 0) {
+				printf("현재 상태 : 이동(스파이스 %d개 보유중)", selected_unit->havest_num); 
+			}
 		}
-		else if (strncmp(selected_unit->mode, "wait", 15) == 0) {
-			pos.x += 2;
-			gotoxy(padd(state_pos, pos));
-			printf("현재 상태 : 대기(스파이스 %d개 보유중)", selected_unit->havest_num);
+		else {
+			if (strncmp(units[idx].mode, "combat", 15) == 0) {
+				printf("현재 상태 : 전투중");
+			}
+			else if (strncmp(units[idx].mode, "wait", 15) == 0) {
+				printf("현재 상태 : 대기");
+			}
 		}
-		else if (strncpy_s(selected_unit->mode, 15, "move", 15) == 0) { 
-			pos.x += 2;
-			gotoxy(padd(state_pos, pos));
-			printf("현재 상태 : 이동(스파이스 %d개 보유중)", selected_unit->havest_num);
-		}
+
 	}
 
 	if (idx != 3) { // 샌드웜 존재
@@ -500,6 +508,8 @@ void esc(bool* build_ready) {
 	}
 	POSITION pos = { 2, 0 };
 	print_message(padd(cmd_pos, pos), "B : Build");
+	pos.x += 2;
+	print_message(padd(cmd_pos, pos), "/ : command");
 
 	// 건설모드 해제, 커서 1x1로 변경
 	if (build_mode) {
@@ -512,6 +522,7 @@ void esc(bool* build_ready) {
 		}
 	}
 	*build_ready = 0;
+	strncpy_s(cmd_mode, 20, "off", 20);
 }
 
 // 초기 출력
@@ -523,6 +534,8 @@ void display() {
 	display_map(); 
 	POSITION pos = { 2, 0 };
 	print_message(padd(cmd_pos, pos), "B : Build");
+	pos.x += 2;
+	print_message(padd(cmd_pos, pos), "/ : command");
 }
 // build
 void display_build_list(bool *build_ready) {  
@@ -546,4 +559,43 @@ void display_build_list(bool *build_ready) {
 	pos.x += 2; 
 	pos.y = 0; 
 	print_message(padd(cmd_pos, pos), "S: Shelter"); 
+}
+void display_cmd_list() {
+	for (int r = 0; r < CMD_HEIGHT - 2; r++) { 
+		erase_message(padd(cmd_pos, (POSITION) { 2 + r, 0 }), STA_WIDTH - 1); 
+	}
+
+	POSITION pos = { 2, 0 }; 
+	print_message(padd(cmd_pos, pos), "1: 샌드웜 on/off");  
+	pos.y = CMD_WIDTH / 2;
+	print_message(padd(cmd_pos, pos), "2: 레드팀 유닛 생성"); 
+	pos.x += 2;
+	pos.y = 0;
+	print_message(padd(cmd_pos, pos), "3: 블루팀 유닛 생성");
+	pos.y = CMD_WIDTH / 2;
+	print_message(padd(cmd_pos, pos), "4: 자원 설정");
+	pos.x += 2;
+	pos.y = 0;
+	print_message(padd(cmd_pos, pos), "5: 스파이스 매장지 생성");
+	pos.y = CMD_WIDTH / 2;
+	print_message(padd(cmd_pos, pos), "6: 돌 생성");
+
+}
+void erase_cmd() {
+	for (int r = 0; r < CMD_HEIGHT - 2; r++) {
+		erase_message(padd(cmd_pos, (POSITION) { 2 + r, 0 }), STA_WIDTH - 1);
+	}
+}
+void display_r_units_list() {
+	for (int r = 0; r < CMD_HEIGHT - 2; r++) {
+		erase_message(padd(cmd_pos, (POSITION) { 2 + r, 0 }), STA_WIDTH - 1); 
+	}
+
+	POSITION pos = { 2, 0 }; 
+	print_message(padd(cmd_pos, pos), "1: 하베스터"); 
+	pos.y = CMD_WIDTH / 2; 
+	print_message(padd(cmd_pos, pos), "2: 투사"); 
+	pos.x += 2; 
+	pos.y = 0; 
+	print_message(padd(cmd_pos, pos), "3: 중전차"); 
 }

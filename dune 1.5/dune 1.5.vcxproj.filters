@@ -24,15 +24,21 @@
     <ClInclude Include="io.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="ai.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="io.c">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="engine.c">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="display.c">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ai.c">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="io.c">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
