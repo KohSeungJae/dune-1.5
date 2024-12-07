@@ -154,6 +154,29 @@ struct {
 }UNIT_INFO;
 
 typedef
+enum {
+	wait,
+	move,
+	select_s,
+	select_p,
+	select_pp,
+	move_to_s,
+	move_to_b,
+	move_to_b_w,
+	move_to_bd,
+	move_to_sw,
+	move_to_e,
+	patrol_to_1,
+	patrol_to_2,
+	wait_h,
+	combat,
+	attack_b,
+	bait,
+	bait2,
+	hide_on_rock
+}UNIT_MODE;
+
+typedef
 struct {
 	bool exist; 
 	POSITION pos;
@@ -161,7 +184,7 @@ struct {
 	POSITION point1, point2;
 	POSITION* combat_pos_p;
 	char havest_num;
-	char mode[15];
+	UNIT_MODE mode;
 	int hp;
 	int next_move_time;
 	int next_action_time;
@@ -232,5 +255,18 @@ struct {
 	int exist_time;
 	STATE_MESSAGE state_message;
 }STORM;
+
+
+
+
+// ÇÔ¼ö
+void unit_push(UNIT_INFO* info, POSITION pos);
+void unit_erase(POSITION pos);
+int get_sandworm_idx(POSITION pos);
+int get_unit_idx(POSITION pos);
+int get_building_idx(POSITION pos);
+int get_storm_idx(POSITION pos);
+POSITION get_position(POSITION building_pos);
+void building_erase(POSITION pos);
 
 #endif

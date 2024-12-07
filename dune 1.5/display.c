@@ -25,6 +25,7 @@ extern SANDWORM sandworm[2];
 extern bool map_change[MAP_HEIGHT][MAP_WIDTH];
 extern POSITION cursor;
 extern RESOURCE resource;
+extern RESOURCE r_resource;
 extern STORM storm;
 extern EAGLE eagle;
 extern int sys_clock;
@@ -36,49 +37,6 @@ extern BUILDING_INFO b_plate_info;
 extern BUILDING_INFO r_plate_info;
 extern char cmd_mode[20];
 
-// 연결리스트에서 해당하는 객체의 인덱스값을 반환하는 함수
-int get_sandworm_idx(POSITION pos) {
-	for (int i = 0; i < 2; i++) {
-		if (sandworm[i].pos.x == pos.x && sandworm[i].pos.y == pos.y) return i;
-	}
-	return 3;
-}
-int get_unit_idx(POSITION pos) { // 해당위치에 있는 유닛의 인덱스를 반환
-	int idx = 0;
-	while (units[units[idx].next].exist) {
-		idx = units[idx].next;
-		if (units[idx].pos.x == pos.x && units[idx].pos.y == pos.y) {
-			return idx;
-		}
-	}
-	return 0;
-}
-int get_building_idx(POSITION pos) {
-	int idx = 0;
-	while (buildings[buildings[idx].next].exist) {
-		idx = buildings[idx].next;
-		for (int r = 0; r < buildings[idx].info_p->size; r++) {
-			for (int c = 0; c < buildings[idx].info_p->size; c++) {
-				POSITION n_pos = padd(buildings[idx].pos, (POSITION) { r, c });
-				if (pos.x == n_pos.x && pos.y == n_pos.y) return idx;
-			}
-		}
-	}
-	return 0;
-}
-int get_storm_idx(POSITION pos) {
-	int idx = 0;
-	for (int r = 0; r < 2; r++) {
-		for (int c = 0; c < 2; c++) {
-			POSITION npos = padd(storm.pos, (POSITION) { r, c });
-			if (npos.x == pos.x && npos.y == pos.y) {
-				return idx;
-			}
-			idx++;
-		}
-	}
-	return -1;
-}
 
 // 프레임 출력함수
 void display_map_frame() {
@@ -252,7 +210,21 @@ void display_map() {
 				}
 				int idx = get_unit_idx((POSITION) { r, c });
 				if (idx) { // 유닛이 존재할경우
-					int color = (check_cursor((POSITION) { r, c })) ? COLOR_CURSOR : units[idx].info_p->color;
+					int color;
+					if (check_cursor((POSITION) { r, c })) {
+						color = COLOR_CURSOR;
+					}
+					else if (map[r][c]->repr == 'R') { // 유닛이 돌위에 올라간경우, 회색으로 표시
+						if (units[idx].info_p->color == COLOR_BLUE) {
+							color = 113;
+						}
+						else {
+							color = 116;
+						}
+					}
+					else {
+						color = units[idx].info_p->color;
+					}
 					printc(padd(map_pos, (POSITION) { r, c }), units[idx].info_p->repr, color);
 					map_change[r][c] = 0;
 					continue;
@@ -398,6 +370,12 @@ void display_state_message() {
 			else {
 				printf(" (%d)", selected_building->hp);
 			}
+			if (selected_building->info_p->repr == 'B' && selected_building->info_p->color == COLOR_RED) { // 상대팀 본진의 경우 스파이스 보유량을 표시
+				pos.x += 2;
+				gotoxy(padd(state_pos, pos));
+				printf("%d 스파이스 보유중", r_resource.spice);
+			}
+
 			return;
 		}
 	}
@@ -414,24 +392,24 @@ void display_state_message() {
 		gotoxy(padd(state_pos, pos)); 
 
 		if (selected_unit->info_p->repr == 'H') { // 하베스터의 경우
-			if (strncmp(selected_unit->mode, "move_to_s", 15) == 0 || \
-				strncmp(selected_unit->mode, "move_to_b", 15) == 0 || \
-				strncmp(selected_unit->mode, "move_to_b_w", 15) == 0 || \
-				strncmp(selected_unit->mode, "wait_h", 15) == 0) {
+			if (selected_unit->mode == move_to_s || \
+				selected_unit->mode == move_to_b|| \
+				selected_unit->mode == move_to_b_w||\
+				selected_unit->mode == wait_h) {
 				printf("현재 상태 : 수확(스파이스 %d개 보유중)", selected_unit->havest_num); 
 			}
-			else if (strncmp(selected_unit->mode, "wait", 15) == 0) { 
+			else if (selected_unit->mode == wait) { 
 				printf("현재 상태 : 대기(스파이스 %d개 보유중)", selected_unit->havest_num); 
 			}
-			else if (strncmp(selected_unit->mode,"move", 15) == 0) {
+			else if (selected_unit->mode == move) {
 				printf("현재 상태 : 이동(스파이스 %d개 보유중)", selected_unit->havest_num); 
 			}
 		}
 		else {
-			if (strncmp(units[idx].mode, "combat", 15) == 0) {
+			if (selected_unit->mode == combat) {
 				printf("현재 상태 : 전투중");
 			}
-			else if (strncmp(units[idx].mode, "wait", 15) == 0) {
+			else if (selected_unit->mode == wait) {  
 				printf("현재 상태 : 대기");
 			}
 		}
