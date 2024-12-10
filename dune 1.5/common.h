@@ -56,6 +56,7 @@ typedef enum {
 	k_4,
 	k_5, 
 	k_6,
+	k_7,
 	k_w,
 	k_h,
 	k_b,
@@ -262,6 +263,8 @@ struct {
 // ÇÔ¼ö
 void unit_push(UNIT_INFO* info, POSITION pos);
 void unit_erase(POSITION pos);
+void building_push(BUILDING_INFO* info, POSITION pos);
+void building_erase(POSITION pos);
 int get_sandworm_idx(POSITION pos);
 int get_unit_idx(POSITION pos);
 int get_building_idx(POSITION pos);

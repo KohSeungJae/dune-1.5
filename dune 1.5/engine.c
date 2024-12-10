@@ -414,6 +414,40 @@ b_garage_info = {
 		}
 	}
 },
+r_dormitory_info = {
+	.repr = 'D',
+	.name = "숙소",
+	.color = COLOR_RED,
+	.cost = 2,
+	.size = 2,
+	.max_hp = 10,
+	.state_message = {
+		.size = 3,
+		.about_size = 2,
+		.message = {
+			"[숙소]",
+			"인구 최대치를 늘려준다.",
+			"건설 비용 : 2",
+		}
+	}
+},
+r_garage_info = {
+	.repr = 'G',
+	.name = "창고",
+	.color = COLOR_RED,
+	.cost = 4,
+	.size = 2,
+	.max_hp = 10,
+	.state_message = {
+		.size = 3,
+		.about_size = 2,
+		.message = {
+			"[창고]",
+			"스파이스 최대 보유량을 늘려준다.",
+			"건설 비용 : 4",
+		}
+	}
+},
 b_barracks_info = {
 	.repr = 'B',
 	.name = "병영",
@@ -614,7 +648,7 @@ inline space_action();
 inline void objects_move();
 void units_action();
 // 테스트를 위한 명령어
-void test_cmd(unsigned char cmd_num) { 
+void test_cmd(int cmd_num) { 
 	if (cmd_num == 0) {
 		strncpy_s(cmd_mode, 20, "on", 20);
 		display_cmd_list(); 
@@ -631,6 +665,14 @@ void test_cmd(unsigned char cmd_num) {
 			display_r_units_list();  
 			strncpy_s(cmd_mode, 20, "make_r_unit", 20); 
 			// 종료 x
+		}
+		else if (cmd_num == 3) {
+			display_units_list();
+			strncpy_s(cmd_mode, 20, "make_b_unit", 20);
+		}
+		else if (cmd_num == 4) {
+			display_resource_list();
+			strncpy_s(cmd_mode, 20, "resource", 20);
 		}
 		else if (cmd_num == 5) {
 			display_system_message("위치를 선택해 주세요.");
@@ -657,6 +699,37 @@ void test_cmd(unsigned char cmd_num) {
 		}
 		display_system_message("위치를 선택해 주세요."); 
 	}
+	else if (strncmp(cmd_mode, "make_b_unit", 20) == 0) {
+		if (cmd_num == 1) {
+			strncpy_s(cmd_mode, 20, "make_b_h", 20);
+		}
+		else if (cmd_num == 2) {
+			strncpy_s(cmd_mode, 20, "make_b_s", 20);
+		}
+		else if (cmd_num == 3) {
+			strncpy_s(cmd_mode, 20, "make_b_f", 20);
+		}
+		else {
+			display_system_message("잘못된 번호입니다.");
+			return;
+		}
+		display_system_message("위치를 선택해 주세요.");
+	}
+	else if (strncmp(cmd_mode, "resource", 20) == 0) {
+		resource_change = 1;
+		if (cmd_num == 1) {
+			resource.spice += 5;
+		}
+		else if (cmd_num == 2) {
+			resource.spice -= 5;
+		}
+		else if (cmd_num == 3) {
+			resource.population += 5;
+		}
+		else if (cmd_num == 4) {
+			resource.population -= 5;
+		}
+	}
 }
 void make_test_object() {
 	if (strncmp(cmd_mode, "make_r_h", 20) == 0) {
@@ -668,6 +741,15 @@ void make_test_object() {
 	else if (strncmp(cmd_mode, "make_r_t", 20) == 0) {
 		unit_push(&r_tank_info, cursor);
 	}
+	else if (strncmp(cmd_mode, "make_b_h", 20) == 0) {
+		unit_push(&b_havester_info, cursor);
+	}
+	else if (strncmp(cmd_mode, "make_b_s", 20) == 0) {
+		unit_push(&b_soldier_info, cursor);
+	}
+	else if (strncmp(cmd_mode, "make_b_f", 20) == 0) {
+		unit_push(&b_fremen_info, cursor);
+	}
 	else if (strncmp(cmd_mode, "make_spice_bd", 20) == 0) {
 		building_push(&spice_info, cursor);
 	}
@@ -678,7 +760,7 @@ void make_test_object() {
 	else {
 		return;
 	}
-
+	strncpy_s(cmd_mode, 20, "off", 20);
 	esc(&build_ready); // 명령모드 종료
 }
 // 
@@ -760,13 +842,14 @@ int main(void) {
 			case k_f: make_unit(&b_fremen_info); break;
 			case k_1: 
 				test_cmd(1); 
-				bait_mode_exchange(); 
 				break;
 			case k_2: test_cmd(2); break; 
 			case k_3: test_cmd(3); break;
+			case k_4: test_cmd(4); break;
 			case k_5: test_cmd(5); break;
 			case k_6: test_cmd(6); break;
 			case k_cmd: test_cmd(0); break;
+			case k_7: bait_mode_exchange(); break;
 			case k_none:
 			case k_undef:
 			default: break;

@@ -577,3 +577,32 @@ void display_r_units_list() {
 	pos.y = 0; 
 	print_message(padd(cmd_pos, pos), "3: 중전차"); 
 }
+void display_units_list() {
+	for (int r = 0; r < CMD_HEIGHT - 2; r++) {
+		erase_message(padd(cmd_pos, (POSITION) { 2 + r, 0 }), STA_WIDTH - 1);
+	}
+
+	POSITION pos = { 2, 0 }; 
+	print_message(padd(cmd_pos, pos), "1: 하베스터"); 
+	pos.y = CMD_WIDTH / 2; 
+	print_message(padd(cmd_pos, pos), "2: 보병"); 
+	pos.x += 2; 
+	pos.y = 0; 
+	print_message(padd(cmd_pos, pos), "3: 프레멘"); 
+}
+
+void display_resource_list() {
+	for (int r = 0; r < CMD_HEIGHT - 2; r++) {
+		erase_message(padd(cmd_pos, (POSITION) { 2 + r, 0 }), STA_WIDTH - 1);
+	}
+
+	POSITION pos = { 2, 0 };
+	print_message(padd(cmd_pos, pos), "1: 스파이스 +5");
+	pos.y = CMD_WIDTH / 2;
+	print_message(padd(cmd_pos, pos), "2: 스파이스 -5");
+	pos.x += 2;
+	pos.y = 0;
+	print_message(padd(cmd_pos, pos), "3: 인구수 +5");
+	pos.y = CMD_WIDTH / 2;
+	print_message(padd(cmd_pos, pos), "4: 인구수 -5");
+}

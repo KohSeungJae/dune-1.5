@@ -39,7 +39,9 @@ spice_info,
 b_dormitory_info,
 b_garage_info,
 b_barracks_info,
-b_shelter_info;
+b_shelter_info,
+r_dormitory_info,
+r_garage_info;
 
 RESOURCE r_resource = {
 	.spice = 0,
@@ -240,5 +242,12 @@ void build_up_state() {
 		units[idx].next_move_time = sys_clock + units[idx].info_p->move_period; 
 		units[idx].mode = move_to_s; 
 	}
-
+	if (r_resource.spice >= r_garage_info.cost) {
+		r_resource.spice -= r_garage_info.cost;
+		building_push(&r_garage_info, (POSITION) { 0, MAP_WIDTH - 4 });
+		map_change[0][MAP_WIDTH - 3] = 'R';
+		map_change[0][MAP_WIDTH - 4] = 'R';
+		map_change[1][MAP_WIDTH - 3] = 'R';
+		map_change[1][MAP_WIDTH - 4] = 'R';
+	}
 }
